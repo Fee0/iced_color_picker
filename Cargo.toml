@@ -1,0 +1,12 @@
+[package]
+name = "iced_color_picker"
+version = "0.1.0"
+edition = "2024"
+description = "Iced color picker: HSV disc, value bar, RGB sliders, hex field, copy"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+iced = { version = "0.14", features = ["canvas", "svg"] }
+
+[dev-dependencies]
+iced = { version = "0.14", features = ["canvas", "svg"] }
