@@ -125,10 +125,11 @@ where
     fn snapshot_hash(&self) -> u64 {
         use std::collections::hash_map::DefaultHasher;
 
+        let (h, s, v) = self.state.hsv();
         let snapshot = PickerSnapshot {
-            h: self.state.h,
-            s: self.state.s,
-            v: self.state.v,
+            h,
+            s,
+            v,
             hex_field: self.state.hex_field().to_string(),
             border_radius: self.border_radius,
             width: self.width,
@@ -139,25 +140,27 @@ where
         snapshot.hash(&mut hasher);
         hasher.finish()
     }
+}
 
-    fn build_content(&self) -> Element<'a, PickerMessage, Theme, Renderer>
-    where
-        Theme: Catalog
-            + button::Catalog
-            + text_input::Catalog
-            + svg::Catalog
-            + slider::Catalog
-            + text::Catalog
-            + 'a,
-        for<'b> <Theme as button::Catalog>::Class<'b>: From<button::StyleFn<'b, Theme>>,
-        for<'b> <Theme as text_input::Catalog>::Class<'b>: From<text_input::StyleFn<'b, Theme>>,
-        for<'b> <Theme as svg::Catalog>::Class<'b>: From<svg::StyleFn<'b, Theme>>,
-        Renderer: iced::advanced::renderer::Renderer
-            + geometry::Renderer
-            + iced::advanced::text::Renderer<Font = iced::Font>
-            + iced::advanced::svg::Renderer
-            + 'a,
-    {
+impl<'a, Theme, Renderer> ColorPicker<'a, Theme, Renderer>
+where
+    Theme: Catalog
+        + button::Catalog
+        + text_input::Catalog
+        + svg::Catalog
+        + slider::Catalog
+        + text::Catalog
+        + 'a,
+    for<'b> <Theme as button::Catalog>::Class<'b>: From<button::StyleFn<'b, Theme>>,
+    for<'b> <Theme as text_input::Catalog>::Class<'b>: From<text_input::StyleFn<'b, Theme>>,
+    for<'b> <Theme as svg::Catalog>::Class<'b>: From<svg::StyleFn<'b, Theme>>,
+    Renderer: iced::advanced::renderer::Renderer
+        + geometry::Renderer
+        + iced::advanced::text::Renderer<Font = iced::Font>
+        + iced::advanced::svg::Renderer
+        + 'a,
+{
+    fn build_content(&self) -> Element<'a, PickerMessage, Theme, Renderer> {
         let hex_border_radius = (self.border_radius * 0.5).max(1.0);
         let (r, g, b) = self.state.rgb8();
         let label_color = contrast_text_color(r, g, b);
@@ -168,7 +171,7 @@ where
         };
         let class = Rc::clone(&self.class);
 
-        let preview_inner = Row::new()
+        let preview_row = Row::new()
             .push(
                 text_input("", self.state.hex_field())
                     .on_input(PickerMessage::HexEdited)
@@ -203,19 +206,15 @@ where
             .spacing(8)
             .align_y(iced::Alignment::Center)
             .width(Length::Fill)
-            .height(Length::Fill);
-
-        let preview_row = Row::new()
-            .push(preview_inner.width(Length::Fill))
-            .width(Length::Fill)
             .height(Length::Fixed(PREVIEW_HEIGHT))
             .padding([0.0, PREVIEW_HORIZONTAL_PADDING]);
 
-        let disc = canvas::saturation_disc(self.state.h, self.state.s, Rc::clone(&class))
+        let (h, s, v) = self.state.hsv();
+        let disc = canvas::saturation_disc(h, s, Rc::clone(&class))
             .width(Length::Fixed(DISC_DIAMETER))
             .height(Length::Fixed(DISC_DIAMETER));
 
-        let vbar = canvas::value_bar(self.state.h, self.state.s, self.state.v, Rc::clone(&class))
+        let vbar = canvas::value_bar(h, s, v, Rc::clone(&class))
             .width(Length::Fixed(VALUE_BAR_WIDTH))
             .height(Length::Fixed(DISC_DIAMETER));
 
@@ -241,24 +240,7 @@ where
             .into()
     }
 
-    fn rebuild_if_needed(&mut self, tree: &mut Tree)
-    where
-        Theme: Catalog
-            + button::Catalog
-            + text_input::Catalog
-            + svg::Catalog
-            + slider::Catalog
-            + text::Catalog
-            + 'a,
-        for<'b> <Theme as button::Catalog>::Class<'b>: From<button::StyleFn<'b, Theme>>,
-        for<'b> <Theme as text_input::Catalog>::Class<'b>: From<text_input::StyleFn<'b, Theme>>,
-        for<'b> <Theme as svg::Catalog>::Class<'b>: From<svg::StyleFn<'b, Theme>>,
-        Renderer: iced::advanced::renderer::Renderer
-            + geometry::Renderer
-            + iced::advanced::text::Renderer<Font = iced::Font>
-            + iced::advanced::svg::Renderer
-            + 'a,
-    {
+    fn rebuild_if_needed(&mut self, tree: &mut Tree) {
         let new_hash = self.snapshot_hash();
 
         if self.content_hash != new_hash {

@@ -12,9 +12,9 @@ pub enum PickerMessage {
 }
 
 pub struct ColorPickerState {
-    pub h: f32,
-    pub s: f32,
-    pub v: f32,
+    h: f32,
+    s: f32,
+    v: f32,
     hex_field: String,
 }
 
@@ -37,6 +37,14 @@ impl ColorPickerState {
         iced::Color::from_rgb8(r, g, b)
     }
 
+    pub fn hsv(&self) -> (f32, f32, f32) {
+        (self.h, self.s, self.v)
+    }
+
+    pub fn hex(&self) -> &str {
+        &self.hex_field
+    }
+
     pub(crate) fn rgb8(&self) -> (u8, u8, u8) {
         hsv_to_rgb8(self.h, self.s, self.v)
     }
@@ -48,6 +56,14 @@ impl ColorPickerState {
     fn sync_hex_field_from_rgb(&mut self) {
         let (r, g, b) = self.rgb8();
         self.hex_field = format!("#{r:02X}{g:02X}{b:02X}");
+    }
+
+    fn set_rgb8(&mut self, r: u8, g: u8, b: u8) {
+        let (h, s, v) = rgb8_to_hsv(r, g, b);
+        self.h = h;
+        self.s = s;
+        self.v = v;
+        self.sync_hex_field_from_rgb();
     }
 
     pub fn update(&mut self, msg: &PickerMessage) {
@@ -63,27 +79,15 @@ impl ColorPickerState {
             }
             PickerMessage::RedChanged(r) => {
                 let (_, g, b) = self.rgb8();
-                let (h, s, v) = rgb8_to_hsv(*r, g, b);
-                self.h = h;
-                self.s = s;
-                self.v = v;
-                self.sync_hex_field_from_rgb();
+                self.set_rgb8(*r, g, b);
             }
             PickerMessage::GreenChanged(g) => {
                 let (r, _, b) = self.rgb8();
-                let (h, s, v) = rgb8_to_hsv(r, *g, b);
-                self.h = h;
-                self.s = s;
-                self.v = v;
-                self.sync_hex_field_from_rgb();
+                self.set_rgb8(r, *g, b);
             }
             PickerMessage::BlueChanged(b) => {
                 let (r, g, _) = self.rgb8();
-                let (h, s, v) = rgb8_to_hsv(r, g, *b);
-                self.h = h;
-                self.s = s;
-                self.v = v;
-                self.sync_hex_field_from_rgb();
+                self.set_rgb8(r, g, *b);
             }
             PickerMessage::HexEdited(s) => {
                 self.hex_field = sanitize_hex_field_input(s);

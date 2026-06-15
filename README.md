@@ -4,7 +4,7 @@ An [Iced](https://iced.rs/) color picker: HSV hue/saturation disc, value bar, RG
 
 ![Color picker demo](assets/screenshot.png)
 
-**Iced 0.14** with the `canvas` and `svg` features (enable the same features on `iced` in your app).
+**Iced 0.14** with the `canvas`, `svg`, and `advanced` features (enable the same features on `iced` in your app).
 
 ## Features
 

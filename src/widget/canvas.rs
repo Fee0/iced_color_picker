@@ -33,6 +33,53 @@ where
     Canvas::new(ValueBarProgram { h, s, v, class })
 }
 
+fn drag_mouse_interaction(
+    dragging: bool,
+    bounds: Rectangle,
+    cursor: mouse::Cursor,
+) -> mouse::Interaction {
+    if dragging {
+        mouse::Interaction::Crosshair
+    } else if cursor.is_over(bounds) {
+        mouse::Interaction::Pointer
+    } else {
+        mouse::Interaction::default()
+    }
+}
+
+fn handle_drag(
+    dragging: &mut bool,
+    event: &canvas::Event,
+    bounds: Rectangle,
+    cursor: mouse::Cursor,
+    pick: impl Fn(Point) -> Option<PickerMessage>,
+) -> Option<canvas::Action<PickerMessage>> {
+    match event {
+        canvas::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
+            if let Some(pos) = cursor.position_in(bounds) {
+                if let Some(msg) = pick(pos) {
+                    *dragging = true;
+                    return Some(canvas::Action::publish(msg).and_capture());
+                }
+            }
+            None
+        }
+        canvas::Event::Mouse(mouse::Event::CursorMoved { .. }) if *dragging => {
+            if let Some(pos) = cursor.position_in(bounds) {
+                if let Some(msg) = pick(pos) {
+                    return Some(canvas::Action::publish(msg).and_capture());
+                }
+            }
+            Some(canvas::Action::capture())
+        }
+        canvas::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) if *dragging => {
+            *dragging = false;
+            Some(canvas::Action::capture())
+        }
+        _ => None,
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct DiscInteraction {
     dragging: bool,
@@ -82,38 +129,16 @@ where
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<PickerMessage>> {
         let size = bounds.size();
-        match event {
-            canvas::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                if let Some(pos) = cursor.position_in(bounds) {
-                    if let Some((h, s)) = self.pos_to_hs(pos, size) {
-                        state.dragging = true;
-                        return Some(
-                            canvas::Action::publish(PickerMessage::HueSatFromDisc { h, s })
-                                .and_capture(),
-                        );
-                    }
-                }
-                None
-            }
-            canvas::Event::Mouse(mouse::Event::CursorMoved { .. }) if state.dragging => {
-                if let Some(pos) = cursor.position_in(bounds) {
-                    if let Some((h, s)) = self.pos_to_hs(pos, size) {
-                        return Some(
-                            canvas::Action::publish(PickerMessage::HueSatFromDisc { h, s })
-                                .and_capture(),
-                        );
-                    }
-                }
-                Some(canvas::Action::capture())
-            }
-            canvas::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
-                if state.dragging =>
-            {
-                state.dragging = false;
-                Some(canvas::Action::capture())
-            }
-            _ => None,
-        }
+        handle_drag(
+            &mut state.dragging,
+            event,
+            bounds,
+            cursor,
+            |pos| {
+                self.pos_to_hs(pos, size)
+                    .map(|(h, s)| PickerMessage::HueSatFromDisc { h, s })
+            },
+        )
     }
 
     fn draw(
@@ -201,13 +226,7 @@ where
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> mouse::Interaction {
-        if state.dragging {
-            mouse::Interaction::Crosshair
-        } else if cursor.is_over(bounds) {
-            mouse::Interaction::Pointer
-        } else {
-            mouse::Interaction::default()
-        }
+        drag_mouse_interaction(state.dragging, bounds, cursor)
     }
 }
 
@@ -238,37 +257,17 @@ where
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<PickerMessage>> {
-        let h = bounds.height.max(1.0);
-        let pick_v = |y: f32| (1.0 - (y / h).clamp(0.0, 1.0)).clamp(0.0, 1.0);
-
-        match event {
-            canvas::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                if let Some(pos) = cursor.position_in(bounds) {
-                    state.dragging = true;
-                    let v = pick_v(pos.y);
-                    return Some(
-                        canvas::Action::publish(PickerMessage::ValueFromBar(v)).and_capture(),
-                    );
-                }
-                None
-            }
-            canvas::Event::Mouse(mouse::Event::CursorMoved { .. }) if state.dragging => {
-                if let Some(pos) = cursor.position_in(bounds) {
-                    let v = pick_v(pos.y);
-                    return Some(
-                        canvas::Action::publish(PickerMessage::ValueFromBar(v)).and_capture(),
-                    );
-                }
-                Some(canvas::Action::capture())
-            }
-            canvas::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
-                if state.dragging =>
-            {
-                state.dragging = false;
-                Some(canvas::Action::capture())
-            }
-            _ => None,
-        }
+        let bar_height = bounds.height.max(1.0);
+        handle_drag(
+            &mut state.dragging,
+            event,
+            bounds,
+            cursor,
+            |pos| {
+                let v = (1.0 - (pos.y / bar_height).clamp(0.0, 1.0)).clamp(0.0, 1.0);
+                Some(PickerMessage::ValueFromBar(v))
+            },
+        )
     }
 
     fn draw(
@@ -320,12 +319,6 @@ where
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> mouse::Interaction {
-        if state.dragging {
-            mouse::Interaction::Crosshair
-        } else if cursor.is_over(bounds) {
-            mouse::Interaction::Pointer
-        } else {
-            mouse::Interaction::default()
-        }
+        drag_mouse_interaction(state.dragging, bounds, cursor)
     }
 }

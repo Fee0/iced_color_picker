@@ -2,7 +2,9 @@
 
 use iced::widget::container;
 use iced::{Color, Element, Task, clipboard, window};
-use iced_color_picker::{ColorPickerState, PICKER_PANEL_WIDTH, PickerMessage, color_picker};
+use iced_color_picker::{
+    ColorPickerState, PICKER_PANEL_HEIGHT, PICKER_PANEL_WIDTH, PickerMessage, color_picker,
+};
 
 const BORDER_RADIUS: f32 = 8.0;
 
@@ -21,7 +23,10 @@ fn main() -> iced::Result {
     .title("iced_color_picker demo")
     .theme(iced::Theme::Dark)
     .window(window::Settings {
-        size: iced::Size::new(PICKER_PANEL_WIDTH + 24.0, 480.0),
+        size: iced::Size::new(
+            PICKER_PANEL_WIDTH + 24.0,
+            PICKER_PANEL_HEIGHT + 24.0,
+        ),
         ..window::Settings::default()
     })
     .centered()
@@ -30,11 +35,7 @@ fn main() -> iced::Result {
 
 fn update(state: &mut Demo, message: PickerMessage) -> Task<PickerMessage> {
     match message {
-        PickerMessage::CopyHex => {
-            state.picker.update(&PickerMessage::CopyHex);
-            let hex = color_to_hex(state.picker.to_color());
-            clipboard::write(hex)
-        }
+        PickerMessage::CopyHex => clipboard::write(state.picker.hex().to_string()),
         _ => {
             state.picker.update(&message);
             Task::none()
@@ -46,11 +47,4 @@ fn view(state: &Demo) -> Element<'_, PickerMessage> {
     container(color_picker(&state.picker).border_radius(BORDER_RADIUS))
         .padding(12)
         .into()
-}
-
-fn color_to_hex(c: Color) -> String {
-    let r = (c.r * 255.0 + 0.5) as u8;
-    let g = (c.g * 255.0 + 0.5) as u8;
-    let b = (c.b * 255.0 + 0.5) as u8;
-    format!("#{r:02X}{g:02X}{b:02X}")
 }

@@ -28,10 +28,6 @@ pub enum Status {
     Active,
     /// Hex field or control has focus.
     Focused,
-    /// Pointer is over the widget.
-    Hovered,
-    /// Widget is disabled.
-    Disabled,
 }
 /// Snapshot context for child controls derived from the current color and layout.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -132,16 +128,6 @@ pub fn default(theme: &Theme, status: Status) -> Style {
                 ..base
             }
         }
-        Status::Hovered => Style {
-            preview_border: palette.text.scale_alpha(0.7),
-            ..base
-        },
-        Status::Disabled => Style {
-            preview_border: palette.text.scale_alpha(0.25),
-            focus_accent: palette.text.scale_alpha(0.35),
-            canvas_frame: palette.text.scale_alpha(0.2),
-            ..base
-        },
         Status::Active => base,
     }
 }
