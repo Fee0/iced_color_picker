@@ -1,27 +1,61 @@
+﻿use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
 use crate::canvas::{self, DISC_DIAMETER, VALUE_BAR_WIDTH};
-use crate::style::{self, Catalog, Status as PickerStatus, StyleFn};
+use crate::style::{self, Catalog, CatalogExt, PickerContext, Status as PickerStatus, StyleFn};
 use crate::{ColorPickerState, PickerMessage, contrast_text_color};
 use iced::advanced::graphics::geometry;
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::renderer;
-use iced::advanced::widget::{Operation, Tree, Widget};
+use iced::advanced::widget::tree::Tree;
+use iced::advanced::widget::{Operation, Widget};
 use iced::advanced::{Clipboard, Shell, overlay};
 use iced::widget::svg::Handle;
-use iced::widget::text_input;
-use iced::widget::{Column, Row, button, container, slider, space, svg, text};
+use iced::widget::{Column, Row, button, slider, space, svg, text, text_input};
 use iced::{
     Background, Border, Color, ContentFit, Element, Length, Rectangle, Shadow, Size, Vector,
 };
 
-/// Copy icon bytes from [`assets/svg/copy.svg`](../assets/svg/copy.svg). Stroke is recolored via `svg::Style::color`.
 const COPY_ICON_SVG: &[u8] = include_bytes!("../assets/svg/copy.svg");
 
 const DEFAULT_BORDER_RADIUS: f32 = 8.0;
 const PICKER_VERTICAL_PADDING: f32 = 12.0;
 const PREVIEW_HEIGHT: f32 = 52.0;
+const PREVIEW_HORIZONTAL_PADDING: f32 = 10.0;
 const SLIDER_BLOCK_HEIGHT: f32 = 90.0;
+
+struct PickerSnapshot {
+    h: f32,
+    s: f32,
+    v: f32,
+    hex_field: String,
+    border_radius: f32,
+    width: Length,
+    class_revision: u64,
+}
+
+impl Hash for PickerSnapshot {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.h.to_bits().hash(state);
+        self.s.to_bits().hash(state);
+        self.v.to_bits().hash(state);
+        self.hex_field.hash(state);
+        self.border_radius.to_bits().hash(state);
+        match self.width {
+            Length::Fill => 0u8.hash(state),
+            Length::FillPortion(p) => {
+                1u8.hash(state);
+                p.hash(state);
+            }
+            Length::Shrink => 2u8.hash(state),
+            Length::Fixed(f) => {
+                3u8.hash(state);
+                f.to_bits().hash(state);
+            }
+        }
+        self.class_revision.hash(state);
+    }
+}
 
 /// A theme-aware HSV color picker widget.
 pub struct ColorPicker<
@@ -34,8 +68,11 @@ pub struct ColorPicker<
     state: &'a ColorPickerState,
     border_radius: f32,
     width: Length,
+    /// Shared style class (`StyleFn` is not `Clone`, so an `Rc` is used internally).
     class: Rc<Theme::Class<'a>>,
+    class_revision: u64,
     content: Element<'a, PickerMessage, Theme, Renderer>,
+    content_hash: u64,
 }
 
 impl<'a, Theme, Renderer> ColorPicker<'a, Theme, Renderer>
@@ -50,7 +87,9 @@ where
             border_radius: DEFAULT_BORDER_RADIUS,
             width: Length::Fill,
             class: Rc::new(Theme::default()),
+            class_revision: 0,
             content: space::horizontal().into(),
+            content_hash: 0,
         }
     }
 
@@ -75,21 +114,38 @@ where
         Theme::Class<'a>: From<StyleFn<'a, Theme>>,
     {
         self.class = Rc::new((Box::new(style) as StyleFn<'a, Theme>).into());
+        self.class_revision += 1;
         self
+    }
+
+    fn snapshot_hash(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+
+        let snapshot = PickerSnapshot {
+            h: self.state.h,
+            s: self.state.s,
+            v: self.state.v,
+            hex_field: self.state.hex_field().to_string(),
+            border_radius: self.border_radius,
+            width: self.width,
+            class_revision: self.class_revision,
+        };
+
+        let mut hasher = DefaultHasher::new();
+        snapshot.hash(&mut hasher);
+        hasher.finish()
     }
 
     fn build_content(&self) -> Element<'a, PickerMessage, Theme, Renderer>
     where
         Theme: Catalog
             + button::Catalog
-            + container::Catalog
             + text_input::Catalog
             + svg::Catalog
             + slider::Catalog
             + text::Catalog
             + 'a,
         for<'b> <Theme as button::Catalog>::Class<'b>: From<button::StyleFn<'b, Theme>>,
-        for<'b> <Theme as container::Catalog>::Class<'b>: From<container::StyleFn<'b, Theme>>,
         for<'b> <Theme as text_input::Catalog>::Class<'b>: From<text_input::StyleFn<'b, Theme>>,
         for<'b> <Theme as svg::Catalog>::Class<'b>: From<svg::StyleFn<'b, Theme>>,
         Renderer: iced::advanced::renderer::Renderer
@@ -100,9 +156,13 @@ where
     {
         let hex_border_radius = (self.border_radius * 0.5).max(1.0);
         let (r, g, b) = self.state.rgb8();
-        let preview_color = self.state.to_color();
         let label_color = contrast_text_color(r, g, b);
-        let border_radius = self.border_radius;
+        let ctx = PickerContext {
+            label_color,
+            hex_border_radius,
+            border_radius: self.border_radius,
+        };
+        let class = Rc::clone(&self.class);
 
         let preview_inner = Row::new()
             .push(
@@ -113,36 +173,9 @@ where
                     .padding([0, 2])
                     .width(Length::Fill)
                     .style({
-                        let class = Rc::clone(&self.class);
+                        let class = Rc::clone(&class);
                         move |theme: &Theme, status: text_input::Status| {
-                            let picker = <Theme as Catalog>::style(
-                                theme,
-                                class.as_ref(),
-                                text_input_picker_status(status),
-                            );
-                            text_input::Style {
-                                background: Background::Color(Color {
-                                    r: 0.0,
-                                    g: 0.0,
-                                    b: 0.0,
-                                    a: 0.0,
-                                }),
-                                border: Border {
-                                    radius: hex_border_radius.into(),
-                                    width: match status {
-                                        text_input::Status::Focused { .. } => 1.0,
-                                        _ => 0.0,
-                                    },
-                                    color: match status {
-                                        text_input::Status::Focused { .. } => picker.focus_accent,
-                                        _ => label_color.scale_alpha(0.45),
-                                    },
-                                },
-                                icon: label_color,
-                                placeholder: label_color.scale_alpha(0.45),
-                                value: label_color,
-                                selection: picker.selection,
-                            }
+                            theme.hex_input_style(class.as_ref(), &ctx, status)
                         }
                     }),
             )
@@ -152,58 +185,29 @@ where
                         .width(Length::Fixed(20.0))
                         .height(Length::Fixed(20.0))
                         .content_fit(ContentFit::Contain)
-                        .style(move |_theme: &Theme, _status: svg::Status| svg::Style {
-                            color: Some(label_color),
+                        .style(move |theme: &Theme, _status: svg::Status| {
+                            theme.copy_icon_style(&ctx)
                         })
                         .into();
                 button(copy_icon)
                     .on_press(PickerMessage::CopyHex)
                     .padding(4)
-                    .style(
-                        move |_theme: &Theme, _status: button::Status| button::Style {
-                            background: None,
-                            text_color: label_color,
-                            border: Border {
-                                width: 0.0,
-                                radius: border_radius.into(),
-                                ..Border::default()
-                            },
-                            shadow: Shadow::default(),
-                            snap: false,
-                        },
-                    )
+                    .style(move |theme: &Theme, _status: button::Status| {
+                        theme.copy_button_style(&ctx)
+                    })
             })
             .spacing(8)
             .align_y(iced::Alignment::Center)
             .width(Length::Fill)
             .height(Length::Fill);
 
-        let preview = container(preview_inner)
+        let preview_row = Row::new()
+            .push(preview_inner.width(Length::Fill))
             .width(Length::Fill)
             .height(Length::Fixed(PREVIEW_HEIGHT))
-            .padding([0, 10])
-            .style({
-                let class = Rc::clone(&self.class);
-                move |theme: &Theme| {
-                    let picker =
-                        <Theme as Catalog>::style(theme, class.as_ref(), PickerStatus::Active);
-                    container::Style {
-                    background: Some(Background::Color(preview_color)),
-                    border: Border {
-                        color: picker.preview_border,
-                        width: 1.0,
-                        radius: border_radius.into(),
-                    },
-                        ..Default::default()
-                    }
-                }
-            });
+            .padding([0.0, PREVIEW_HORIZONTAL_PADDING]);
 
-        let disc = canvas::saturation_disc(
-            self.state.h,
-            self.state.s,
-            Rc::clone(&self.class),
-        )
+        let disc = canvas::saturation_disc(self.state.h, self.state.s, Rc::clone(&class))
             .width(Length::Fixed(DISC_DIAMETER))
             .height(Length::Fixed(DISC_DIAMETER));
 
@@ -211,10 +215,10 @@ where
             self.state.h,
             self.state.s,
             self.state.v,
-            Rc::clone(&self.class),
+            Rc::clone(&class),
         )
-            .width(Length::Fixed(VALUE_BAR_WIDTH))
-            .height(Length::Fixed(DISC_DIAMETER));
+        .width(Length::Fixed(VALUE_BAR_WIDTH))
+        .height(Length::Fixed(DISC_DIAMETER));
 
         let sliders = Column::new()
             .push(channel_row("R", r, PickerMessage::RedChanged))
@@ -229,13 +233,40 @@ where
             .align_y(iced::Alignment::Center);
 
         Column::new()
-            .push(preview)
+            .push(preview_row)
             .push(disc_bar)
             .push(sliders)
             .spacing(10)
             .padding(PICKER_VERTICAL_PADDING)
             .width(Length::Fill)
             .into()
+    }
+
+    fn rebuild_if_needed(&mut self, tree: &mut Tree)
+    where
+        Theme: Catalog
+            + button::Catalog
+            + text_input::Catalog
+            + svg::Catalog
+            + slider::Catalog
+            + text::Catalog
+            + 'a,
+        for<'b> <Theme as button::Catalog>::Class<'b>: From<button::StyleFn<'b, Theme>>,
+        for<'b> <Theme as text_input::Catalog>::Class<'b>: From<text_input::StyleFn<'b, Theme>>,
+        for<'b> <Theme as svg::Catalog>::Class<'b>: From<svg::StyleFn<'b, Theme>>,
+        Renderer: iced::advanced::renderer::Renderer
+            + geometry::Renderer
+            + iced::advanced::text::Renderer<Font = iced::Font>
+            + iced::advanced::svg::Renderer
+            + 'a,
+    {
+        let new_hash = self.snapshot_hash();
+
+        if self.content_hash != new_hash {
+            self.content_hash = new_hash;
+            self.content = self.build_content();
+            tree.diff_children(std::slice::from_ref(&self.content));
+        }
     }
 }
 
@@ -270,10 +301,30 @@ where
         .into()
 }
 
-fn text_input_picker_status(status: text_input::Status) -> PickerStatus {
-    match status {
-        text_input::Status::Focused { .. } => PickerStatus::Focused,
-        _ => PickerStatus::Active,
+fn draw_preview_chrome<Renderer>(
+    renderer: &mut Renderer,
+    preview_color: Color,
+    border_color: Color,
+    border_radius: f32,
+    bounds: Rectangle,
+    viewport: &Rectangle,
+) where
+    Renderer: iced::advanced::renderer::Renderer,
+{
+    if let Some(clipped) = bounds.intersection(viewport) {
+        renderer.fill_quad(
+            renderer::Quad {
+                bounds: clipped,
+                border: Border {
+                    color: border_color,
+                    width: 1.0,
+                    radius: border_radius.into(),
+                },
+                shadow: Shadow::default(),
+                snap: false,
+            },
+            Background::Color(preview_color),
+        );
     }
 }
 
@@ -281,14 +332,12 @@ impl<'a, Theme, Renderer> Widget<PickerMessage, Theme, Renderer> for ColorPicker
 where
     Theme: Catalog
         + button::Catalog
-        + container::Catalog
         + text_input::Catalog
         + svg::Catalog
         + slider::Catalog
         + text::Catalog
         + 'a,
     for<'b> <Theme as button::Catalog>::Class<'b>: From<button::StyleFn<'b, Theme>>,
-    for<'b> <Theme as container::Catalog>::Class<'b>: From<container::StyleFn<'b, Theme>>,
     for<'b> <Theme as text_input::Catalog>::Class<'b>: From<text_input::StyleFn<'b, Theme>>,
     for<'b> <Theme as svg::Catalog>::Class<'b>: From<svg::StyleFn<'b, Theme>>,
     Renderer: iced::advanced::renderer::Renderer
@@ -312,10 +361,9 @@ where
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        let limits = limits.width(self.width);
-        self.content = self.build_content();
-        tree.diff_children(std::slice::from_ref(&self.content));
+        self.rebuild_if_needed(tree);
 
+        let limits = limits.width(self.width);
         let node = self.content.as_widget_mut().layout(
             &mut tree.children[0],
             renderer,
@@ -358,12 +406,28 @@ where
         cursor: iced::mouse::Cursor,
         viewport: &Rectangle,
     ) {
+        let content_layout = layout.children().next().unwrap();
+        let picker_style =
+            <Theme as Catalog>::style(theme, self.class.as_ref(), PickerStatus::Active);
+        let preview_color = self.state.to_color();
+
+        if let Some(preview_layout) = content_layout.children().next() {
+            draw_preview_chrome(
+                renderer,
+                preview_color,
+                picker_style.preview_border,
+                self.border_radius,
+                preview_layout.bounds(),
+                viewport,
+            );
+        }
+
         self.content.as_widget().draw(
             &tree.children[0],
             renderer,
             theme,
             style,
-            layout.children().next().unwrap(),
+            content_layout,
             cursor,
             viewport,
         );
@@ -424,14 +488,12 @@ impl<'a, Theme, Renderer> From<ColorPicker<'a, Theme, Renderer>>
 where
     Theme: Catalog
         + button::Catalog
-        + container::Catalog
         + text_input::Catalog
         + svg::Catalog
         + slider::Catalog
         + text::Catalog
         + 'a,
     for<'b> <Theme as button::Catalog>::Class<'b>: From<button::StyleFn<'b, Theme>>,
-    for<'b> <Theme as container::Catalog>::Class<'b>: From<container::StyleFn<'b, Theme>>,
     for<'b> <Theme as text_input::Catalog>::Class<'b>: From<text_input::StyleFn<'b, Theme>>,
     for<'b> <Theme as svg::Catalog>::Class<'b>: From<svg::StyleFn<'b, Theme>>,
     Renderer: iced::advanced::renderer::Renderer
