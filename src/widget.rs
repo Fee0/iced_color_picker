@@ -1,4 +1,4 @@
-﻿use std::hash::{Hash, Hasher};
+use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
 use crate::canvas::{self, DISC_DIAMETER, VALUE_BAR_WIDTH};
@@ -58,11 +58,8 @@ impl Hash for PickerSnapshot {
 }
 
 /// A theme-aware HSV color picker widget.
-pub struct ColorPicker<
-    'a,
-    Theme = iced::Theme,
-    Renderer = iced::Renderer,
-> where
+pub struct ColorPicker<'a, Theme = iced::Theme, Renderer = iced::Renderer>
+where
     Theme: Catalog,
 {
     state: &'a ColorPickerState,
@@ -211,14 +208,9 @@ where
             .width(Length::Fixed(DISC_DIAMETER))
             .height(Length::Fixed(DISC_DIAMETER));
 
-        let vbar = canvas::value_bar(
-            self.state.h,
-            self.state.s,
-            self.state.v,
-            Rc::clone(&class),
-        )
-        .width(Length::Fixed(VALUE_BAR_WIDTH))
-        .height(Length::Fixed(DISC_DIAMETER));
+        let vbar = canvas::value_bar(self.state.h, self.state.s, self.state.v, Rc::clone(&class))
+            .width(Length::Fixed(VALUE_BAR_WIDTH))
+            .height(Length::Fixed(DISC_DIAMETER));
 
         let sliders = Column::new()
             .push(channel_row("R", r, PickerMessage::RedChanged))
@@ -277,9 +269,8 @@ fn channel_row<'a, Theme, Renderer>(
 ) -> Element<'a, PickerMessage, Theme, Renderer>
 where
     Theme: slider::Catalog + text::Catalog + 'a,
-    Renderer: iced::advanced::renderer::Renderer
-        + iced::advanced::text::Renderer<Font = iced::Font>
-        + 'a,
+    Renderer:
+        iced::advanced::renderer::Renderer + iced::advanced::text::Renderer<Font = iced::Font> + 'a,
 {
     Row::new()
         .push(
@@ -328,7 +319,8 @@ fn draw_preview_chrome<Renderer>(
     }
 }
 
-impl<'a, Theme, Renderer> Widget<PickerMessage, Theme, Renderer> for ColorPicker<'a, Theme, Renderer>
+impl<'a, Theme, Renderer> Widget<PickerMessage, Theme, Renderer>
+    for ColorPicker<'a, Theme, Renderer>
 where
     Theme: Catalog
         + button::Catalog
@@ -364,11 +356,10 @@ where
         self.rebuild_if_needed(tree);
 
         let limits = limits.width(self.width);
-        let node = self.content.as_widget_mut().layout(
-            &mut tree.children[0],
-            renderer,
-            &limits.loose(),
-        );
+        let node =
+            self.content
+                .as_widget_mut()
+                .layout(&mut tree.children[0], renderer, &limits.loose());
 
         layout::Node::with_children(node.size(), vec![node])
     }
