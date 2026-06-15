@@ -47,6 +47,13 @@ fn drag_mouse_interaction(
     }
 }
 
+fn clamped_position_in(cursor: mouse::Cursor, bounds: Rectangle) -> Option<Point> {
+    cursor.position().map(|pos| Point::new(
+        (pos.x - bounds.x).clamp(0.0, bounds.width),
+        (pos.y - bounds.y).clamp(0.0, bounds.height),
+    ))
+}
+
 fn handle_drag(
     dragging: &mut bool,
     event: &canvas::Event,
@@ -65,7 +72,7 @@ fn handle_drag(
             None
         }
         canvas::Event::Mouse(mouse::Event::CursorMoved { .. }) if *dragging => {
-            if let Some(pos) = cursor.position_in(bounds) {
+            if let Some(pos) = clamped_position_in(cursor, bounds) {
                 if let Some(msg) = pick(pos) {
                     return Some(canvas::Action::publish(msg).and_capture());
                 }
