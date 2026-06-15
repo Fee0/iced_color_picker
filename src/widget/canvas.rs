@@ -1,15 +1,12 @@
 use std::rc::Rc;
 
-use crate::PickerMessage;
+use crate::color::{DISC_ANGULAR_STEPS, DISC_RADIAL_STEPS, hsv_to_iced_color};
+use crate::state::PickerMessage;
 use crate::style::{Catalog, Status};
-use crate::{DISC_ANGULAR_STEPS, DISC_RADIAL_STEPS, hsv_to_iced_color};
 use iced::advanced::graphics::geometry;
 use iced::mouse;
 use iced::widget::canvas::{self, Canvas};
 use iced::{Point, Rectangle, Size};
-
-pub(crate) const DISC_DIAMETER: f32 = 200.0;
-pub(crate) const VALUE_BAR_WIDTH: f32 = 28.0;
 
 pub(crate) fn saturation_disc<'a, Theme, Renderer>(
     h: f32,

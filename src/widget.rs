@@ -1,9 +1,11 @@
+mod canvas;
+
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
-use crate::canvas::{self, DISC_DIAMETER, VALUE_BAR_WIDTH};
+use crate::color::contrast_text_color;
+use crate::state::{ColorPickerState, PickerMessage};
 use crate::style::{self, Catalog, CatalogExt, PickerContext, Status as PickerStatus, StyleFn};
-use crate::{ColorPickerState, PickerMessage, contrast_text_color};
 use iced::advanced::graphics::geometry;
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::renderer;
@@ -17,6 +19,11 @@ use iced::{
 };
 
 const COPY_ICON_SVG: &[u8] = include_bytes!("../assets/svg/copy.svg");
+
+pub(crate) const DISC_DIAMETER: f32 = 200.0;
+pub(crate) const VALUE_BAR_WIDTH: f32 = 28.0;
+/// Recommended width for a panel containing the picker (disc + value bar + padding).
+pub const PICKER_PANEL_WIDTH: f32 = DISC_DIAMETER + VALUE_BAR_WIDTH + 40.0;
 
 const DEFAULT_BORDER_RADIUS: f32 = 8.0;
 const PICKER_VERTICAL_PADDING: f32 = 12.0;
@@ -504,3 +511,8 @@ pub const PICKER_PANEL_HEIGHT: f32 = PICKER_VERTICAL_PADDING * 2.0
     + DISC_DIAMETER
     + 10.0
     + SLIDER_BLOCK_HEIGHT;
+
+/// Creates a [`ColorPicker`] widget for the given state.
+pub fn color_picker<'a>(state: &'a ColorPickerState) -> ColorPicker<'a> {
+    ColorPicker::new(state)
+}
