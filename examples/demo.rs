@@ -2,7 +2,7 @@
 
 use iced::widget::container;
 use iced::{clipboard, window, Color, Element, Task};
-use iced_color_picker::{ColorPickerState, PickerMessage, PICKER_PANEL_WIDTH};
+use iced_color_picker::{color_picker, ColorPickerState, PickerMessage, PICKER_PANEL_WIDTH};
 
 const BORDER_RADIUS: f32 = 8.0;
 
@@ -19,6 +19,7 @@ fn main() -> iced::Result {
         view,
     )
     .title("iced_color_picker demo")
+    .theme(iced::Theme::Dark)
     .window(window::Settings {
         size: iced::Size::new(PICKER_PANEL_WIDTH + 24.0, 480.0),
         ..window::Settings::default()
@@ -42,9 +43,11 @@ fn update(state: &mut Demo, message: PickerMessage) -> Task<PickerMessage> {
 }
 
 fn view(state: &Demo) -> Element<'_, PickerMessage> {
-    container(state.picker.view(BORDER_RADIUS))
-        .padding(12)
-        .into()
+    container(
+        color_picker(&state.picker).border_radius(BORDER_RADIUS),
+    )
+    .padding(12)
+    .into()
 }
 
 fn color_to_hex(c: Color) -> String {

@@ -6,7 +6,7 @@ description = "Iced color picker: HSV disc, value bar, RGB sliders, hex field, c
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-iced = { version = "0.14", features = ["canvas", "svg"] }
+iced = { version = "0.14", features = ["canvas", "svg", "advanced"] }
 
 [dev-dependencies]
-iced = { version = "0.14", features = ["canvas", "svg"] }
+iced = { version = "0.14", features = ["canvas", "svg", "advanced"] }
