@@ -24,7 +24,7 @@ const CHECKMARK_SVG: &[u8] = include_bytes!("../assets/svg/checkmark.svg");
 pub(crate) const DISC_DIAMETER: f32 = 200.0;
 pub(crate) const VALUE_BAR_WIDTH: f32 = 28.0;
 /// Recommended width for a panel containing the picker (disc + value bar + padding).
-pub const PICKER_PANEL_WIDTH: f32 = DISC_DIAMETER + VALUE_BAR_WIDTH + 40.0;
+pub const PICKER_PANEL_WIDTH: f32 = DISC_DIAMETER + VALUE_BAR_WIDTH + 10.0 + 2.0 * PICKER_VERTICAL_PADDING;
 
 const DEFAULT_BORDER_RADIUS: f32 = 8.0;
 const PICKER_VERTICAL_PADDING: f32 = 12.0;
@@ -92,7 +92,7 @@ where
         Self {
             state,
             border_radius: DEFAULT_BORDER_RADIUS,
-            width: Length::Fill,
+            width: Length::Shrink,
             class: Rc::new(Theme::default()),
             class_revision: 0,
             content: space::horizontal().into(),
@@ -214,7 +214,7 @@ where
             })
             .spacing(8)
             .align_y(iced::Alignment::Center)
-            .width(Length::Fill)
+            .width(Length::Fixed(DISC_DIAMETER + VALUE_BAR_WIDTH + 10.0))
             .height(Length::Fixed(PREVIEW_HEIGHT))
             .padding([0.0, PREVIEW_HORIZONTAL_PADDING]);
 
@@ -231,7 +231,8 @@ where
             .push(channel_row("R", r, PickerMessage::RedChanged))
             .push(channel_row("G", g, PickerMessage::GreenChanged))
             .push(channel_row("B", b, PickerMessage::BlueChanged))
-            .spacing(6);
+            .spacing(6)
+            .width(Length::Fixed(DISC_DIAMETER + VALUE_BAR_WIDTH + 10.0));
 
         let disc_bar = Row::new()
             .push(disc)
@@ -245,7 +246,7 @@ where
             .push(sliders)
             .spacing(10)
             .padding(PICKER_VERTICAL_PADDING)
-            .width(Length::Fill)
+            .width(Length::Shrink)
             .into()
     }
 
