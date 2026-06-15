@@ -19,6 +19,7 @@ use iced::{
 };
 
 const COPY_ICON_SVG: &[u8] = include_bytes!("../assets/svg/copy.svg");
+const CHECKMARK_SVG: &[u8] = include_bytes!("../assets/svg/checkmark.svg");
 
 pub(crate) const DISC_DIAMETER: f32 = 200.0;
 pub(crate) const VALUE_BAR_WIDTH: f32 = 28.0;
@@ -39,6 +40,7 @@ struct PickerSnapshot {
     border_radius: f32,
     width: Length,
     class_revision: u64,
+    copy_confirmed: bool,
 }
 
 impl Hash for PickerSnapshot {
@@ -61,6 +63,7 @@ impl Hash for PickerSnapshot {
             }
         }
         self.class_revision.hash(state);
+        self.copy_confirmed.hash(state);
     }
 }
 
@@ -134,6 +137,7 @@ where
             border_radius: self.border_radius,
             width: self.width,
             class_revision: self.class_revision,
+            copy_confirmed: self.state.copy_confirmed(),
         };
 
         let mut hasher = DefaultHasher::new();
@@ -187,8 +191,13 @@ where
                     }),
             )
             .push({
+                let icon_bytes = if self.state.copy_confirmed() {
+                    CHECKMARK_SVG
+                } else {
+                    COPY_ICON_SVG
+                };
                 let copy_icon: Element<'a, PickerMessage, Theme, Renderer> =
-                    svg(Handle::from_memory(COPY_ICON_SVG))
+                    svg(Handle::from_memory(icon_bytes))
                         .width(Length::Fixed(20.0))
                         .height(Length::Fixed(20.0))
                         .content_fit(ContentFit::Contain)
@@ -199,8 +208,8 @@ where
                 button(copy_icon)
                     .on_press(PickerMessage::CopyHex)
                     .padding(4)
-                    .style(move |theme: &Theme, _status: button::Status| {
-                        theme.copy_button_style(&ctx)
+                    .style(move |theme: &Theme, status: button::Status| {
+                        theme.copy_button_style(&ctx, status)
                     })
             })
             .spacing(8)

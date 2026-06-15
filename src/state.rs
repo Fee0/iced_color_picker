@@ -9,6 +9,7 @@ pub enum PickerMessage {
     BlueChanged(u8),
     HexEdited(String),
     CopyHex,
+    CopyConfirmed,
 }
 
 pub struct ColorPickerState {
@@ -16,6 +17,7 @@ pub struct ColorPickerState {
     s: f32,
     v: f32,
     hex_field: String,
+    copy_confirmed: bool,
 }
 
 impl ColorPickerState {
@@ -29,6 +31,7 @@ impl ColorPickerState {
             s,
             v,
             hex_field: format!("#{r:02X}{g:02X}{b:02X}"),
+            copy_confirmed: false,
         }
     }
 
@@ -43,6 +46,10 @@ impl ColorPickerState {
 
     pub fn hex(&self) -> &str {
         &self.hex_field
+    }
+
+    pub fn copy_confirmed(&self) -> bool {
+        self.copy_confirmed
     }
 
     pub(crate) fn rgb8(&self) -> (u8, u8, u8) {
@@ -99,7 +106,12 @@ impl ColorPickerState {
                     self.hex_field = format!("#{r:02X}{g:02X}{b:02X}");
                 }
             }
-            PickerMessage::CopyHex => {}
+            PickerMessage::CopyHex => {
+                self.copy_confirmed = true;
+            }
+            PickerMessage::CopyConfirmed => {
+                self.copy_confirmed = false;
+            }
         }
     }
 }

@@ -83,9 +83,14 @@ pub(crate) trait CatalogExt: Catalog {
             selection: picker.selection,
         }
     }
-    fn copy_button_style(&self, ctx: &PickerContext) -> button::Style {
+    fn copy_button_style(&self, ctx: &PickerContext, status: button::Status) -> button::Style {
+        let background = match status {
+            button::Status::Hovered => Some(Background::Color(ctx.label_color.scale_alpha(0.12))),
+            button::Status::Pressed => Some(Background::Color(ctx.label_color.scale_alpha(0.22))),
+            _ => None,
+        };
         button::Style {
-            background: None,
+            background,
             text_color: ctx.label_color,
             border: Border {
                 width: 0.0,

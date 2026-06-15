@@ -10,3 +10,4 @@ iced = { version = "0.14", features = ["canvas", "svg", "advanced"] }
 
 [dev-dependencies]
 iced = { version = "0.14", features = ["canvas", "svg", "advanced"] }
+futures-timer = "3"
