@@ -19,6 +19,8 @@ pub struct Style {
     pub selector_inner: Color,
     /// Value bar horizontal indicator (alias of focus accent by default).
     pub value_indicator: Color,
+    /// Alpha bar horizontal indicator.
+    pub alpha_indicator: Color,
 }
 /// The style status of a [`ColorPicker`](crate::widget::ColorPicker).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -130,6 +132,7 @@ pub fn default(theme: &Theme, status: Status) -> Style {
             Style {
                 focus_accent: extended.primary.strong.color,
                 value_indicator: extended.primary.strong.color,
+                alpha_indicator: extended.primary.strong.color,
                 ..base
             }
         }
@@ -144,11 +147,13 @@ pub fn primary(theme: &Theme, status: Status) -> Style {
     let mut style = from_palette(&palette);
     style.focus_accent = extended.primary.base.color;
     style.value_indicator = extended.primary.base.color;
+    style.alpha_indicator = extended.primary.base.color;
     style.selection = extended.primary.base.color.scale_alpha(0.35);
     match status {
         Status::Focused => Style {
             focus_accent: extended.primary.strong.color,
             value_indicator: extended.primary.strong.color,
+            alpha_indicator: extended.primary.strong.color,
             ..style
         },
         _ => style,
@@ -164,5 +169,6 @@ fn from_palette(palette: &Palette) -> Style {
         selector_outer: palette.text,
         selector_inner: palette.background,
         value_indicator: focus_accent,
+        alpha_indicator: focus_accent,
     }
 }

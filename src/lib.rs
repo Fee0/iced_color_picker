@@ -8,4 +8,7 @@ mod widget;
 
 pub use state::{ColorPickerState, PickerMessage};
 pub use style::{Catalog, Status, Style, StyleFn, default, primary};
-pub use widget::{ColorPicker, PICKER_PANEL_HEIGHT, PICKER_PANEL_WIDTH, color_picker};
+pub use widget::{
+    ColorPicker, PICKER_PANEL_HEIGHT, PICKER_PANEL_HEIGHT_RGBA, PICKER_PANEL_WIDTH,
+    PICKER_PANEL_WIDTH_RGBA, color_picker,
+};

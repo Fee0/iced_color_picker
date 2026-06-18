@@ -99,3 +99,40 @@ pub(crate) fn sanitize_hex_field_input(s: &str) -> String {
     }
     out
 }
+
+pub(crate) fn parse_rgba_hex(s: &str) -> Option<(u8, u8, u8, u8)> {
+    let s = s.trim();
+    let digits = s.strip_prefix('#').unwrap_or(s);
+    if digits.len() != 8 {
+        return None;
+    }
+    let r = u8::from_str_radix(digits.get(0..2)?, 16).ok()?;
+    let g = u8::from_str_radix(digits.get(2..4)?, 16).ok()?;
+    let b = u8::from_str_radix(digits.get(4..6)?, 16).ok()?;
+    let a = u8::from_str_radix(digits.get(6..8)?, 16).ok()?;
+    Some((r, g, b, a))
+}
+
+/// At most 9 characters: optional `#` plus up to 8 hex digits. Strips any other characters.
+pub(crate) fn sanitize_hex_field_input_rgba(s: &str) -> String {
+    const MAX_LEN_WITH_HASH: usize = 9;
+    const MAX_LEN_PLAIN_HEX: usize = 8;
+    let mut out = String::new();
+    for c in s.chars() {
+        if out.is_empty() && c == '#' {
+            out.push('#');
+            continue;
+        }
+        if c.is_ascii_hexdigit() {
+            let cap = if out.starts_with('#') {
+                MAX_LEN_WITH_HASH
+            } else {
+                MAX_LEN_PLAIN_HEX
+            };
+            if out.len() < cap {
+                out.push(c);
+            }
+        }
+    }
+    out
+}

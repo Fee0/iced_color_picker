@@ -33,6 +33,20 @@ where
     Canvas::new(ValueBarProgram { h, s, v, class })
 }
 
+pub(crate) fn alpha_bar<'a, Theme, Renderer>(
+    r: u8,
+    g: u8,
+    b: u8,
+    a: f32,
+    class: Rc<Theme::Class<'a>>,
+) -> Canvas<AlphaBarProgram<'a, Theme>, PickerMessage, Theme, Renderer>
+where
+    Theme: Catalog + 'a,
+    Renderer: geometry::Renderer,
+{
+    Canvas::new(AlphaBarProgram { r, g, b, a, class })
+}
+
 fn drag_mouse_interaction(
     dragging: bool,
     bounds: Rectangle,
@@ -307,6 +321,118 @@ where
             &canvas::Path::line(Point::new(0.0, vy), Point::new(w, vy)),
             canvas::Stroke::default()
                 .with_color(picker.value_indicator)
+                .with_width(2.0),
+        );
+        frame.stroke_rectangle(
+            Point::new(0.0, 0.0),
+            Size::new(w, h),
+            canvas::Stroke::default()
+                .with_color(picker.canvas_frame)
+                .with_width(1.0),
+        );
+
+        vec![frame.into_geometry()]
+    }
+
+    fn mouse_interaction(
+        &self,
+        state: &Self::State,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> mouse::Interaction {
+        drag_mouse_interaction(state.dragging, bounds, cursor)
+    }
+}
+
+pub(crate) struct AlphaBarProgram<'a, Theme: Catalog + 'a> {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: f32,
+    pub class: Rc<Theme::Class<'a>>,
+}
+
+impl<'a, Theme, Renderer> canvas::Program<PickerMessage, Theme, Renderer>
+    for AlphaBarProgram<'a, Theme>
+where
+    Renderer: geometry::Renderer,
+    Theme: Catalog + 'a,
+{
+    type State = BarInteraction;
+
+    fn update(
+        &self,
+        state: &mut Self::State,
+        event: &canvas::Event,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> Option<canvas::Action<PickerMessage>> {
+        let bar_height = bounds.height.max(1.0);
+        handle_drag(
+            &mut state.dragging,
+            event,
+            bounds,
+            cursor,
+            |pos| {
+                let a = (1.0 - (pos.y / bar_height).clamp(0.0, 1.0)).clamp(0.0, 1.0);
+                let a_u8 = (a * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
+                Some(PickerMessage::AlphaChanged(a_u8))
+            },
+        )
+    }
+
+    fn draw(
+        &self,
+        _state: &Self::State,
+        renderer: &Renderer,
+        theme: &Theme,
+        bounds: Rectangle,
+        _cursor: mouse::Cursor,
+    ) -> Vec<canvas::Geometry<Renderer>> {
+        let picker = theme.style(self.class.as_ref(), Status::Active);
+        let sz = bounds.size();
+        let mut frame = canvas::Frame::new(renderer, sz);
+        let w = sz.width;
+        let h = sz.height;
+
+        // Checkerboard background to represent transparency
+        let cell = 4.0_f32;
+        let cols = (w / cell).ceil() as usize;
+        let rows = (h / cell).ceil() as usize;
+        let light = iced::Color { r: 0.80, g: 0.80, b: 0.80, a: 1.0 };
+        let dark  = iced::Color { r: 0.60, g: 0.60, b: 0.60, a: 1.0 };
+        for row in 0..rows {
+            for col in 0..cols {
+                let color = if (row + col) % 2 == 0 { light } else { dark };
+                let x = col as f32 * cell;
+                let y = row as f32 * cell;
+                let cw = (x + cell).min(w) - x;
+                let ch = (y + cell).min(h) - y;
+                frame.fill_rectangle(Point::new(x, y), Size::new(cw, ch), color);
+            }
+        }
+
+        // Gradient strips: alpha=0 (top, transparent) → alpha=1 (bottom, opaque)
+        let rf = self.r as f32 / 255.0;
+        let gf = self.g as f32 / 255.0;
+        let bf = self.b as f32 / 255.0;
+        let steps = 32;
+        let strip_h = h / steps as f32;
+        for i in 0..steps {
+            let a0 = 1.0 - i as f32 / steps as f32;
+            let a1 = 1.0 - (i + 1) as f32 / steps as f32;
+            let a_mid = (a0 + a1) * 0.5;
+            let color = iced::Color { r: rf, g: gf, b: bf, a: a_mid };
+            let y0 = i as f32 * strip_h;
+            frame.fill_rectangle(Point::new(0.0, y0), Size::new(w, strip_h), color);
+        }
+
+        // Indicator line at current alpha position
+        let ay = (1.0 - self.a) * h;
+        frame.stroke(
+            &canvas::Path::line(Point::new(0.0, ay), Point::new(w, ay)),
+            canvas::Stroke::default()
+                .with_color(picker.alpha_indicator)
                 .with_width(2.0),
         );
         frame.stroke_rectangle(

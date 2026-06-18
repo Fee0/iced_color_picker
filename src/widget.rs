@@ -23,8 +23,11 @@ const CHECKMARK_SVG: &[u8] = include_bytes!("../assets/svg/checkmark.svg");
 
 pub(crate) const DISC_DIAMETER: f32 = 200.0;
 pub(crate) const VALUE_BAR_WIDTH: f32 = 28.0;
-/// Recommended width for a panel containing the picker (disc + value bar + padding).
+pub(crate) const ALPHA_BAR_WIDTH: f32 = 28.0;
+/// Recommended width for an RGB panel (disc + value bar + padding).
 pub const PICKER_PANEL_WIDTH: f32 = DISC_DIAMETER + VALUE_BAR_WIDTH + 10.0 + 2.0 * PICKER_VERTICAL_PADDING;
+/// Recommended width for an RGBA panel (disc + value bar + alpha bar + padding).
+pub const PICKER_PANEL_WIDTH_RGBA: f32 = DISC_DIAMETER + VALUE_BAR_WIDTH + 4.0 + ALPHA_BAR_WIDTH + 10.0 + 2.0 * PICKER_VERTICAL_PADDING;
 
 const DEFAULT_BORDER_RADIUS: f32 = 8.0;
 const PICKER_VERTICAL_PADDING: f32 = 12.0;
@@ -36,6 +39,7 @@ struct PickerSnapshot {
     h: f32,
     s: f32,
     v: f32,
+    a: f32,
     hex_field: String,
     border_radius: f32,
     width: Length,
@@ -48,6 +52,7 @@ impl Hash for PickerSnapshot {
         self.h.to_bits().hash(state);
         self.s.to_bits().hash(state);
         self.v.to_bits().hash(state);
+        self.a.to_bits().hash(state);
         self.hex_field.hash(state);
         self.border_radius.to_bits().hash(state);
         match self.width {
@@ -133,6 +138,7 @@ where
             h,
             s,
             v,
+            a: self.state.alpha(),
             hex_field: self.state.hex_field().to_string(),
             border_radius: self.border_radius,
             width: self.width,
@@ -168,6 +174,12 @@ where
         let hex_border_radius = (self.border_radius * 0.5).max(1.0);
         let (r, g, b) = self.state.rgb8();
         let label_color = contrast_text_color(r, g, b);
+        let bars_width = if self.state.alpha_enabled() {
+            VALUE_BAR_WIDTH + 4.0 + ALPHA_BAR_WIDTH
+        } else {
+            VALUE_BAR_WIDTH
+        };
+        let inner_width = DISC_DIAMETER + 10.0 + bars_width;
         let ctx = PickerContext {
             label_color,
             hex_border_radius,
@@ -214,11 +226,14 @@ where
             })
             .spacing(8)
             .align_y(iced::Alignment::Center)
-            .width(Length::Fixed(DISC_DIAMETER + VALUE_BAR_WIDTH + 10.0))
+            .width(Length::Fixed(inner_width))
             .height(Length::Fixed(PREVIEW_HEIGHT))
             .padding([0.0, PREVIEW_HORIZONTAL_PADDING]);
 
         let (h, s, v) = self.state.hsv();
+        let a = self.state.alpha();
+        let a_u8 = self.state.alpha_u8();
+
         let disc = canvas::saturation_disc(h, s, Rc::clone(&class))
             .width(Length::Fixed(DISC_DIAMETER))
             .height(Length::Fixed(DISC_DIAMETER));
@@ -227,18 +242,36 @@ where
             .width(Length::Fixed(VALUE_BAR_WIDTH))
             .height(Length::Fixed(DISC_DIAMETER));
 
-        let sliders = Column::new()
-            .push(channel_row("R", r, PickerMessage::RedChanged))
-            .push(channel_row("G", g, PickerMessage::GreenChanged))
-            .push(channel_row("B", b, PickerMessage::BlueChanged))
-            .spacing(6)
-            .width(Length::Fixed(DISC_DIAMETER + VALUE_BAR_WIDTH + 10.0));
+        let bars_elem: Element<'a, PickerMessage, Theme, Renderer> = if self.state.alpha_enabled() {
+            let abar = canvas::alpha_bar(r, g, b, a, Rc::clone(&class))
+                .width(Length::Fixed(ALPHA_BAR_WIDTH))
+                .height(Length::Fixed(DISC_DIAMETER));
+            Row::new()
+                .push(vbar)
+                .push(abar)
+                .spacing(4)
+                .align_y(iced::Alignment::Center)
+                .into()
+        } else {
+            vbar.into()
+        };
 
         let disc_bar = Row::new()
             .push(disc)
-            .push(vbar)
+            .push(bars_elem)
             .spacing(10)
             .align_y(iced::Alignment::Center);
+
+        let sliders = {
+            let mut col = Column::new()
+                .push(channel_row("R", r, PickerMessage::RedChanged))
+                .push(channel_row("G", g, PickerMessage::GreenChanged))
+                .push(channel_row("B", b, PickerMessage::BlueChanged));
+            if self.state.alpha_enabled() {
+                col = col.push(channel_row("A", a_u8, PickerMessage::AlphaChanged));
+            }
+            col.spacing(6).width(Length::Fixed(inner_width))
+        };
 
         Column::new()
             .push(preview_row)
@@ -497,12 +530,16 @@ where
     }
 }
 
+/// Recommended height for an RGB panel.
 pub const PICKER_PANEL_HEIGHT: f32 = PICKER_VERTICAL_PADDING * 2.0
     + PREVIEW_HEIGHT
     + 10.0
     + DISC_DIAMETER
     + 10.0
     + SLIDER_BLOCK_HEIGHT;
+
+/// Recommended height for an RGBA panel (adds one slider row for alpha).
+pub const PICKER_PANEL_HEIGHT_RGBA: f32 = PICKER_PANEL_HEIGHT + 32.0;
 
 /// Creates a [`ColorPicker`] widget for the given state.
 pub fn color_picker<'a>(state: &'a ColorPickerState) -> ColorPicker<'a> {
