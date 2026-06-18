@@ -23,7 +23,7 @@ pub struct ColorPickerState {
     a: f32,
     alpha_enabled: bool,
     hex_field: String,
-    copy_confirmed: bool,
+    copy_confirmed_until: Option<std::time::Instant>,
 }
 
 impl ColorPickerState {
@@ -39,7 +39,7 @@ impl ColorPickerState {
             a: 1.0,
             alpha_enabled: false,
             hex_field: format!("#{r:02X}{g:02X}{b:02X}"),
-            copy_confirmed: false,
+            copy_confirmed_until: None,
         }
     }
 
@@ -56,7 +56,7 @@ impl ColorPickerState {
             a: c.a.clamp(0.0, 1.0),
             alpha_enabled: true,
             hex_field: format!("#{r:02X}{g:02X}{b:02X}{a:02X}"),
-            copy_confirmed: false,
+            copy_confirmed_until: None,
         }
     }
 
@@ -79,7 +79,12 @@ impl ColorPickerState {
     }
 
     pub fn copy_confirmed(&self) -> bool {
-        self.copy_confirmed
+        self.copy_confirmed_until
+            .map_or(false, |t| std::time::Instant::now() < t)
+    }
+
+    pub(crate) fn copy_confirmed_until(&self) -> Option<std::time::Instant> {
+        self.copy_confirmed_until
     }
 
     pub fn alpha_enabled(&self) -> bool {
@@ -170,10 +175,11 @@ impl ColorPickerState {
                 }
             }
             PickerMessage::CopyHex => {
-                self.copy_confirmed = true;
+                self.copy_confirmed_until =
+                    Some(std::time::Instant::now() + std::time::Duration::from_secs(1));
             }
             PickerMessage::CopyConfirmed => {
-                self.copy_confirmed = false;
+                self.copy_confirmed_until = None;
             }
         }
     }

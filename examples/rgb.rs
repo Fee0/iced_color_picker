@@ -33,13 +33,8 @@ fn main() -> iced::Result {
 fn update(state: &mut Demo, message: PickerMessage) -> Task<PickerMessage> {
     match message {
         PickerMessage::CopyHex => {
-            state.picker.update(&PickerMessage::CopyHex);
-            let clipboard_task = clipboard::write(state.picker.hex().to_string());
-            let reset_task = Task::perform(
-                futures_timer::Delay::new(std::time::Duration::from_secs(1)),
-                |_| PickerMessage::CopyConfirmed,
-            );
-            Task::batch(vec![clipboard_task, reset_task])
+            state.picker.update(&message);
+            clipboard::write(state.picker.hex().to_string())
         }
         _ => {
             state.picker.update(&message);

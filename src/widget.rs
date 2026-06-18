@@ -433,6 +433,14 @@ where
             shell,
             viewport,
         );
+
+        if let Some(until) = self.state.copy_confirmed_until() {
+            if std::time::Instant::now() >= until {
+                shell.publish(PickerMessage::CopyConfirmed);
+            } else {
+                shell.request_redraw();
+            }
+        }
     }
 
     fn draw(
