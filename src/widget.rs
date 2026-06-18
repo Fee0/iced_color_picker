@@ -11,7 +11,7 @@ use iced::advanced::layout::{self, Layout};
 use iced::advanced::renderer;
 use iced::advanced::widget::tree::Tree;
 use iced::advanced::widget::{Operation, Widget};
-use iced::advanced::{Clipboard, Shell, overlay};
+use iced::advanced::{Clipboard, Shell, clipboard, overlay};
 use iced::widget::svg::Handle;
 use iced::widget::{Column, Row, button, slider, space, svg, text, text_input};
 use iced::{
@@ -83,6 +83,7 @@ where
     border_radius: f32,
     width: Length,
     show_sliders: bool,
+    on_copy: Option<Box<dyn Fn(&str) + 'a>>,
     /// Shared style class (`StyleFn` is not `Clone`, so an `Rc` is used internally).
     class: Rc<Theme::Class<'a>>,
     class_revision: u64,
@@ -102,6 +103,7 @@ where
             border_radius: DEFAULT_BORDER_RADIUS,
             width: Length::Shrink,
             show_sliders: true,
+            on_copy: None,
             class: Rc::new(Theme::default()),
             class_revision: 0,
             content: space::horizontal().into(),
@@ -127,6 +129,16 @@ where
     #[must_use]
     pub fn show_sliders(mut self, show: bool) -> Self {
         self.show_sliders = show;
+        self
+    }
+
+    /// Registers a callback invoked (with the hex string) when the copy button is pressed.
+    ///
+    /// The widget writes the hex value to the clipboard automatically; use this for
+    /// any additional side effect (e.g. showing a toast notification).
+    #[must_use]
+    pub fn on_copy(mut self, f: impl Fn(&str) + 'a) -> Self {
+        self.on_copy = Some(Box::new(f));
         self
     }
 
@@ -423,6 +435,9 @@ where
         shell: &mut Shell<'_, PickerMessage>,
         viewport: &Rectangle,
     ) {
+        let mut local_messages: Vec<PickerMessage> = Vec::new();
+        let mut local_shell = Shell::new(&mut local_messages);
+
         self.content.as_widget_mut().update(
             &mut tree.children[0],
             event,
@@ -430,9 +445,25 @@ where
             cursor,
             renderer,
             clipboard,
-            shell,
+            &mut local_shell,
             viewport,
         );
+
+        if local_shell.is_layout_invalid() { shell.invalidate_layout(); }
+        if local_shell.are_widgets_invalid() { shell.invalidate_widgets(); }
+        shell.request_redraw_at(local_shell.redraw_request());
+        if local_shell.is_event_captured() { shell.capture_event(); }
+        shell.request_input_method(local_shell.input_method());
+
+        for msg in local_messages {
+            if matches!(msg, PickerMessage::CopyHex) {
+                clipboard.write(clipboard::Kind::Standard, self.state.hex().to_string());
+                if let Some(f) = &self.on_copy {
+                    f(self.state.hex());
+                }
+            }
+            shell.publish(msg);
+        }
 
         if let Some(until) = self.state.copy_confirmed_until() {
             if std::time::Instant::now() >= until {
