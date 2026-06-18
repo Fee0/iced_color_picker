@@ -217,7 +217,7 @@ where
             &canvas::Path::circle(c, radius),
             canvas::Stroke::default()
                 .with_color(picker.canvas_frame)
-                .with_width(1.0),
+                .with_width(1.5),
         );
 
         let sel_a = self.h * tau;
@@ -328,7 +328,7 @@ where
             Size::new(w, h),
             canvas::Stroke::default()
                 .with_color(picker.canvas_frame)
-                .with_width(1.0),
+                .with_width(1.5),
         );
 
         vec![frame.into_geometry()]
@@ -440,7 +440,7 @@ where
             Size::new(w, h),
             canvas::Stroke::default()
                 .with_color(picker.canvas_frame)
-                .with_width(1.0),
+                .with_width(1.5),
         );
 
         vec![frame.into_geometry()]

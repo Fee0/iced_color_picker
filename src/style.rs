@@ -165,7 +165,7 @@ fn from_palette(palette: &Palette) -> Style {
         preview_border: palette.text.scale_alpha(0.55),
         focus_accent,
         selection: focus_accent.scale_alpha(0.35),
-        canvas_frame: palette.text.scale_alpha(0.45),
+        canvas_frame: palette.text.scale_alpha(0.65),
         selector_outer: palette.text,
         selector_inner: palette.background,
         value_indicator: focus_accent,
