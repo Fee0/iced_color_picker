@@ -45,6 +45,7 @@ struct PickerSnapshot {
     width: Length,
     class_revision: u64,
     copy_confirmed: bool,
+    show_sliders: bool,
 }
 
 impl Hash for PickerSnapshot {
@@ -69,6 +70,7 @@ impl Hash for PickerSnapshot {
         }
         self.class_revision.hash(state);
         self.copy_confirmed.hash(state);
+        self.show_sliders.hash(state);
     }
 }
 
@@ -80,6 +82,7 @@ where
     state: &'a ColorPickerState,
     border_radius: f32,
     width: Length,
+    show_sliders: bool,
     /// Shared style class (`StyleFn` is not `Clone`, so an `Rc` is used internally).
     class: Rc<Theme::Class<'a>>,
     class_revision: u64,
@@ -98,6 +101,7 @@ where
             state,
             border_radius: DEFAULT_BORDER_RADIUS,
             width: Length::Shrink,
+            show_sliders: true,
             class: Rc::new(Theme::default()),
             class_revision: 0,
             content: space::horizontal().into(),
@@ -116,6 +120,13 @@ where
     #[must_use]
     pub fn width(mut self, width: impl Into<Length>) -> Self {
         self.width = width.into();
+        self
+    }
+
+    /// Shows or hides the R/G/B/A slider rows beneath the disc.
+    #[must_use]
+    pub fn show_sliders(mut self, show: bool) -> Self {
+        self.show_sliders = show;
         self
     }
 
@@ -144,6 +155,7 @@ where
             width: self.width,
             class_revision: self.class_revision,
             copy_confirmed: self.state.copy_confirmed(),
+            show_sliders: self.show_sliders,
         };
 
         let mut hasher = DefaultHasher::new();
@@ -262,21 +274,25 @@ where
             .spacing(10)
             .align_y(iced::Alignment::Center);
 
-        let sliders = {
-            let mut col = Column::new()
-                .push(channel_row("R", r, PickerMessage::RedChanged))
-                .push(channel_row("G", g, PickerMessage::GreenChanged))
-                .push(channel_row("B", b, PickerMessage::BlueChanged));
-            if self.state.alpha_enabled() {
-                col = col.push(channel_row("A", a_u8, PickerMessage::AlphaChanged));
-            }
-            col.spacing(6).width(Length::Fixed(inner_width))
-        };
-
-        Column::new()
+        let mut layout = Column::new()
             .push(preview_row)
-            .push(disc_bar)
-            .push(sliders)
+            .push(disc_bar);
+
+        if self.show_sliders {
+            let sliders = {
+                let mut col = Column::new()
+                    .push(channel_row("R", r, PickerMessage::RedChanged))
+                    .push(channel_row("G", g, PickerMessage::GreenChanged))
+                    .push(channel_row("B", b, PickerMessage::BlueChanged));
+                if self.state.alpha_enabled() {
+                    col = col.push(channel_row("A", a_u8, PickerMessage::AlphaChanged));
+                }
+                col.spacing(6).width(Length::Fixed(inner_width))
+            };
+            layout = layout.push(sliders);
+        }
+
+        layout
             .spacing(10)
             .padding(PICKER_VERTICAL_PADDING)
             .width(Length::Shrink)
