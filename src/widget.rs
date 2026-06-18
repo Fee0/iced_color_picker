@@ -27,7 +27,7 @@ pub(crate) const ALPHA_BAR_WIDTH: f32 = 28.0;
 /// Recommended width for an RGB panel (disc + value bar + padding).
 pub const PICKER_PANEL_WIDTH: f32 = DISC_DIAMETER + VALUE_BAR_WIDTH + 10.0 + 2.0 * PICKER_VERTICAL_PADDING;
 /// Recommended width for an RGBA panel (disc + value bar + alpha bar + padding).
-pub const PICKER_PANEL_WIDTH_RGBA: f32 = DISC_DIAMETER + VALUE_BAR_WIDTH + 4.0 + ALPHA_BAR_WIDTH + 10.0 + 2.0 * PICKER_VERTICAL_PADDING;
+pub const PICKER_PANEL_WIDTH_RGBA: f32 = DISC_DIAMETER + VALUE_BAR_WIDTH + 10.0 + ALPHA_BAR_WIDTH + 10.0 + 2.0 * PICKER_VERTICAL_PADDING;
 
 const DEFAULT_BORDER_RADIUS: f32 = 8.0;
 const PICKER_VERTICAL_PADDING: f32 = 12.0;
@@ -187,7 +187,7 @@ where
         let (r, g, b) = self.state.rgb8();
         let label_color = contrast_text_color(r, g, b);
         let bars_width = if self.state.alpha_enabled() {
-            VALUE_BAR_WIDTH + 4.0 + ALPHA_BAR_WIDTH
+            VALUE_BAR_WIDTH + 10.0 + ALPHA_BAR_WIDTH
         } else {
             VALUE_BAR_WIDTH
         };
@@ -261,7 +261,7 @@ where
             Row::new()
                 .push(vbar)
                 .push(abar)
-                .spacing(4)
+                .spacing(10)
                 .align_y(iced::Alignment::Center)
                 .into()
         } else {
