@@ -1,3 +1,5 @@
+use std::cell::Cell;
+
 use crate::color::{
     hsv_to_rgb8, parse_rgb_hex, parse_rgba_hex, rgb8_to_hsv, sanitize_hex_field_input,
     sanitize_hex_field_input_rgba,
@@ -12,8 +14,8 @@ pub enum PickerMessage {
     BlueChanged(u8),
     AlphaChanged(u8),
     HexEdited(String),
+    #[doc(hidden)]
     CopyHex,
-    CopyConfirmed,
 }
 
 pub struct ColorPickerState {
@@ -23,7 +25,7 @@ pub struct ColorPickerState {
     a: f32,
     alpha_enabled: bool,
     hex_field: String,
-    copy_confirmed_until: Option<std::time::Instant>,
+    copy_confirmed_until: Cell<Option<std::time::Instant>>,
 }
 
 impl ColorPickerState {
@@ -39,7 +41,7 @@ impl ColorPickerState {
             a: 1.0,
             alpha_enabled: false,
             hex_field: format!("#{r:02X}{g:02X}{b:02X}"),
-            copy_confirmed_until: None,
+            copy_confirmed_until: Cell::new(None),
         }
     }
 
@@ -56,7 +58,7 @@ impl ColorPickerState {
             a: c.a.clamp(0.0, 1.0),
             alpha_enabled: true,
             hex_field: format!("#{r:02X}{g:02X}{b:02X}{a:02X}"),
-            copy_confirmed_until: None,
+            copy_confirmed_until: Cell::new(None),
         }
     }
 
@@ -80,11 +82,22 @@ impl ColorPickerState {
 
     pub fn copy_confirmed(&self) -> bool {
         self.copy_confirmed_until
+            .get()
             .map_or(false, |t| std::time::Instant::now() < t)
     }
 
     pub(crate) fn copy_confirmed_until(&self) -> Option<std::time::Instant> {
-        self.copy_confirmed_until
+        self.copy_confirmed_until.get()
+    }
+
+    pub(crate) fn start_copy_confirmed(&self) {
+        self.copy_confirmed_until.set(Some(
+            std::time::Instant::now() + std::time::Duration::from_secs(1),
+        ));
+    }
+
+    pub(crate) fn clear_copy_confirmed(&self) {
+        self.copy_confirmed_until.set(None);
     }
 
     pub fn alpha_enabled(&self) -> bool {
@@ -174,13 +187,7 @@ impl ColorPickerState {
                     }
                 }
             }
-            PickerMessage::CopyHex => {
-                self.copy_confirmed_until =
-                    Some(std::time::Instant::now() + std::time::Duration::from_secs(1));
-            }
-            PickerMessage::CopyConfirmed => {
-                self.copy_confirmed_until = None;
-            }
+            PickerMessage::CopyHex => {}
         }
     }
 }

@@ -461,13 +461,17 @@ where
                 if let Some(f) = &self.on_copy {
                     f(self.state.hex());
                 }
+                self.state.start_copy_confirmed();
+                shell.invalidate_layout();
+            } else {
+                shell.publish(msg);
             }
-            shell.publish(msg);
         }
 
         if let Some(until) = self.state.copy_confirmed_until() {
             if std::time::Instant::now() >= until {
-                shell.publish(PickerMessage::CopyConfirmed);
+                self.state.clear_copy_confirmed();
+                shell.invalidate_layout();
             } else {
                 shell.request_redraw();
             }
