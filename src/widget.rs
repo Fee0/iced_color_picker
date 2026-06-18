@@ -197,7 +197,12 @@ where
     fn build_content(&self) -> Element<'a, PickerMessage, Theme, Renderer> {
         let hex_border_radius = (self.border_radius * 0.5).max(1.0);
         let (r, g, b) = self.state.rgb8();
-        let label_color = contrast_text_color(r, g, b);
+        let a = self.state.alpha();
+        // Blend RGB against the checkerboard average (~178 gray) so the label
+        // color stays readable as the color becomes transparent.
+        const CHECKER_AVG: f32 = 178.0;
+        let blend = |c: u8| (c as f32 * a + CHECKER_AVG * (1.0 - a)).round() as u8;
+        let label_color = contrast_text_color(blend(r), blend(g), blend(b));
         let bars_width = if self.state.alpha_enabled() {
             VALUE_BAR_WIDTH + 10.0 + ALPHA_BAR_WIDTH
         } else {
@@ -255,7 +260,6 @@ where
             .padding([0.0, PREVIEW_HORIZONTAL_PADDING]);
 
         let (h, s, v) = self.state.hsv();
-        let a = self.state.alpha();
         let a_u8 = self.state.alpha_u8();
 
         let disc = canvas::saturation_disc(h, s, Rc::clone(&class))
