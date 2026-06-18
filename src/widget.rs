@@ -368,29 +368,17 @@ fn draw_preview_chrome<Renderer>(
 {
     if let Some(clipped) = bounds.intersection(viewport) {
         if preview_color.a < 1.0 {
-            let cell = 8.0_f32;
-            let cols = (clipped.width / cell).ceil() as usize;
-            let rows = (clipped.height / cell).ceil() as usize;
-            let light = Color { r: 0.80, g: 0.80, b: 0.80, a: 1.0 };
-            let dark = Color { r: 0.60, g: 0.60, b: 0.60, a: 1.0 };
-            for row in 0..rows {
-                for col in 0..cols {
-                    let color = if (row + col) % 2 == 0 { light } else { dark };
-                    let x = clipped.x + col as f32 * cell;
-                    let y = clipped.y + row as f32 * cell;
-                    let cw = (x + cell).min(clipped.x + clipped.width) - x;
-                    let ch = (y + cell).min(clipped.y + clipped.height) - y;
-                    renderer.fill_quad(
-                        renderer::Quad {
-                            bounds: Rectangle { x, y, width: cw, height: ch },
-                            border: Border::default(),
-                            shadow: Shadow::default(),
-                            snap: false,
-                        },
-                        Background::Color(color),
-                    );
-                }
-            }
+            canvas::checkerboard_cells(clipped.x, clipped.y, clipped.width, clipped.height, 8.0, |x, y, cw, ch, color| {
+                renderer.fill_quad(
+                    renderer::Quad {
+                        bounds: Rectangle { x, y, width: cw, height: ch },
+                        border: Border::default(),
+                        shadow: Shadow::default(),
+                        snap: false,
+                    },
+                    Background::Color(color),
+                );
+            });
         }
         renderer.fill_quad(
             renderer::Quad {

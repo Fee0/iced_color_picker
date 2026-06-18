@@ -47,6 +47,30 @@ where
     Canvas::new(AlphaBarProgram { r, g, b, a, class })
 }
 
+pub(crate) fn checkerboard_cells(
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    cell: f32,
+    mut draw: impl FnMut(f32, f32, f32, f32, iced::Color),
+) {
+    let light = iced::Color { r: 0.80, g: 0.80, b: 0.80, a: 1.0 };
+    let dark  = iced::Color { r: 0.60, g: 0.60, b: 0.60, a: 1.0 };
+    let cols = (width / cell).ceil() as usize;
+    let rows = (height / cell).ceil() as usize;
+    for row in 0..rows {
+        for col in 0..cols {
+            let color = if (row + col) % 2 == 0 { light } else { dark };
+            let cx = x + col as f32 * cell;
+            let cy = y + row as f32 * cell;
+            let cw = (cx + cell).min(x + width) - cx;
+            let ch = (cy + cell).min(y + height) - cy;
+            draw(cx, cy, cw, ch, color);
+        }
+    }
+}
+
 fn drag_mouse_interaction(
     dragging: bool,
     bounds: Rectangle,
@@ -395,22 +419,9 @@ where
         let w = sz.width;
         let h = sz.height;
 
-        // Checkerboard background to represent transparency
-        let cell = 4.0_f32;
-        let cols = (w / cell).ceil() as usize;
-        let rows = (h / cell).ceil() as usize;
-        let light = iced::Color { r: 0.80, g: 0.80, b: 0.80, a: 1.0 };
-        let dark  = iced::Color { r: 0.60, g: 0.60, b: 0.60, a: 1.0 };
-        for row in 0..rows {
-            for col in 0..cols {
-                let color = if (row + col) % 2 == 0 { light } else { dark };
-                let x = col as f32 * cell;
-                let y = row as f32 * cell;
-                let cw = (x + cell).min(w) - x;
-                let ch = (y + cell).min(h) - y;
-                frame.fill_rectangle(Point::new(x, y), Size::new(cw, ch), color);
-            }
-        }
+        checkerboard_cells(0.0, 0.0, w, h, 4.0, |x, y, cw, ch, color| {
+            frame.fill_rectangle(Point::new(x, y), Size::new(cw, ch), color);
+        });
 
         // Gradient strips: alpha=0 (top, transparent) → alpha=1 (bottom, opaque)
         let rf = self.r as f32 / 255.0;
