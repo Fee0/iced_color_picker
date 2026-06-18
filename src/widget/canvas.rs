@@ -321,7 +321,7 @@ where
             &canvas::Path::line(Point::new(0.0, vy), Point::new(w, vy)),
             canvas::Stroke::default()
                 .with_color(picker.value_indicator)
-                .with_width(2.0),
+                .with_width(4.0),
         );
         frame.stroke_rectangle(
             Point::new(0.0, 0.0),
@@ -433,7 +433,7 @@ where
             &canvas::Path::line(Point::new(0.0, ay), Point::new(w, ay)),
             canvas::Stroke::default()
                 .with_color(picker.alpha_indicator)
-                .with_width(2.0),
+                .with_width(4.0),
         );
         frame.stroke_rectangle(
             Point::new(0.0, 0.0),
