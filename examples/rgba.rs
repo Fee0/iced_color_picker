@@ -48,8 +48,9 @@ fn view(state: &Demo) -> Element<'_, PickerMessage> {
     container(
         color_picker(&state.picker)
             .border_radius(BORDER_RADIUS)
-            .on_copy(|hex| println!("copied: {hex}")),
+            .on_copy(|hex| println!("copied: {hex}"))
+            .bar_border_radius(4.0),
     )
-        .padding(12)
-        .into()
+    .padding(12)
+    .into()
 }

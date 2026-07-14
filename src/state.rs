@@ -7,7 +7,10 @@ use crate::color::{
 
 #[derive(Debug, Clone)]
 pub enum PickerMessage {
-    HueSatFromDisc { h: f32, s: f32 },
+    HueSatFromDisc {
+        h: f32,
+        s: f32,
+    },
     ValueFromBar(f32),
     RedChanged(u8),
     GreenChanged(u8),
@@ -83,7 +86,7 @@ impl ColorPickerState {
     pub fn copy_confirmed(&self) -> bool {
         self.copy_confirmed_until
             .get()
-            .map_or(false, |t| std::time::Instant::now() < t)
+            .is_some_and(|t| std::time::Instant::now() < t)
     }
 
     pub(crate) fn copy_confirmed_until(&self) -> Option<std::time::Instant> {

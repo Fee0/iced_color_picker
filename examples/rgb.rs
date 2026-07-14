@@ -41,6 +41,6 @@ fn view(state: &Demo) -> Element<'_, PickerMessage> {
             .border_radius(BORDER_RADIUS)
             .on_copy(|hex| println!("copied: {hex}")),
     )
-        .padding(12)
-        .into()
+    .padding(12)
+    .into()
 }

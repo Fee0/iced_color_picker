@@ -4,9 +4,10 @@ use crate::color::{DISC_ANGULAR_STEPS, DISC_RADIAL_STEPS, hsv_to_iced_color};
 use crate::state::PickerMessage;
 use crate::style::{Catalog, Status};
 use iced::advanced::graphics::geometry;
+use iced::advanced::graphics::gradient;
 use iced::mouse;
-use iced::widget::canvas::{self, Canvas};
-use iced::{Point, Rectangle, Size};
+use iced::widget::canvas::{self, Canvas, Fill};
+use iced::{Color, Point, Rectangle, Size, border};
 
 pub(crate) fn saturation_disc<'a, Theme, Renderer>(
     h: f32,
@@ -24,13 +25,20 @@ pub(crate) fn value_bar<'a, Theme, Renderer>(
     h: f32,
     s: f32,
     v: f32,
+    bar_border_radius: f32,
     class: Rc<Theme::Class<'a>>,
 ) -> Canvas<ValueBarProgram<'a, Theme>, PickerMessage, Theme, Renderer>
 where
     Theme: Catalog + 'a,
     Renderer: geometry::Renderer,
 {
-    Canvas::new(ValueBarProgram { h, s, v, class })
+    Canvas::new(ValueBarProgram {
+        h,
+        s,
+        v,
+        bar_border_radius,
+        class,
+    })
 }
 
 pub(crate) fn alpha_bar<'a, Theme, Renderer>(
@@ -38,13 +46,21 @@ pub(crate) fn alpha_bar<'a, Theme, Renderer>(
     g: u8,
     b: u8,
     a: f32,
+    bar_border_radius: f32,
     class: Rc<Theme::Class<'a>>,
 ) -> Canvas<AlphaBarProgram<'a, Theme>, PickerMessage, Theme, Renderer>
 where
     Theme: Catalog + 'a,
     Renderer: geometry::Renderer,
 {
-    Canvas::new(AlphaBarProgram { r, g, b, a, class })
+    Canvas::new(AlphaBarProgram {
+        r,
+        g,
+        b,
+        a,
+        bar_border_radius,
+        class,
+    })
 }
 
 pub(crate) fn checkerboard_cells(
@@ -53,10 +69,20 @@ pub(crate) fn checkerboard_cells(
     width: f32,
     height: f32,
     cell: f32,
-    mut draw: impl FnMut(f32, f32, f32, f32, iced::Color),
+    mut draw: impl FnMut(f32, f32, f32, f32, Color),
 ) {
-    let light = iced::Color { r: 0.80, g: 0.80, b: 0.80, a: 1.0 };
-    let dark  = iced::Color { r: 0.60, g: 0.60, b: 0.60, a: 1.0 };
+    let light = Color {
+        r: 0.80,
+        g: 0.80,
+        b: 0.80,
+        a: 1.0,
+    };
+    let dark = Color {
+        r: 0.60,
+        g: 0.60,
+        b: 0.60,
+        a: 1.0,
+    };
     let cols = (width / cell).ceil() as usize;
     let rows = (height / cell).ceil() as usize;
     for row in 0..rows {
@@ -86,10 +112,12 @@ fn drag_mouse_interaction(
 }
 
 fn clamped_position_in(cursor: mouse::Cursor, bounds: Rectangle) -> Option<Point> {
-    cursor.position().map(|pos| Point::new(
-        (pos.x - bounds.x).clamp(0.0, bounds.width),
-        (pos.y - bounds.y).clamp(0.0, bounds.height),
-    ))
+    cursor.position().map(|pos| {
+        Point::new(
+            (pos.x - bounds.x).clamp(0.0, bounds.width),
+            (pos.y - bounds.y).clamp(0.0, bounds.height),
+        )
+    })
 }
 
 fn handle_drag(
@@ -101,19 +129,19 @@ fn handle_drag(
 ) -> Option<canvas::Action<PickerMessage>> {
     match event {
         canvas::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-            if let Some(pos) = cursor.position_in(bounds) {
-                if let Some(msg) = pick(pos) {
-                    *dragging = true;
-                    return Some(canvas::Action::publish(msg).and_capture());
-                }
+            if let Some(pos) = cursor.position_in(bounds)
+                && let Some(msg) = pick(pos)
+            {
+                *dragging = true;
+                return Some(canvas::Action::publish(msg).and_capture());
             }
             None
         }
         canvas::Event::Mouse(mouse::Event::CursorMoved { .. }) if *dragging => {
-            if let Some(pos) = clamped_position_in(cursor, bounds) {
-                if let Some(msg) = pick(pos) {
-                    return Some(canvas::Action::publish(msg).and_capture());
-                }
+            if let Some(pos) = clamped_position_in(cursor, bounds)
+                && let Some(msg) = pick(pos)
+            {
+                return Some(canvas::Action::publish(msg).and_capture());
             }
             Some(canvas::Action::capture())
         }
@@ -174,16 +202,10 @@ where
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<PickerMessage>> {
         let size = bounds.size();
-        handle_drag(
-            &mut state.dragging,
-            event,
-            bounds,
-            cursor,
-            |pos| {
-                self.pos_to_hs(pos, size)
-                    .map(|(h, s)| PickerMessage::HueSatFromDisc { h, s })
-            },
-        )
+        handle_drag(&mut state.dragging, event, bounds, cursor, |pos| {
+            self.pos_to_hs(pos, size)
+                .map(|(h, s)| PickerMessage::HueSatFromDisc { h, s })
+        })
     }
 
     fn draw(
@@ -284,6 +306,7 @@ pub(crate) struct ValueBarProgram<'a, Theme: Catalog + 'a> {
     pub h: f32,
     pub s: f32,
     pub v: f32,
+    pub bar_border_radius: f32,
     pub class: Rc<Theme::Class<'a>>,
 }
 
@@ -303,16 +326,10 @@ where
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<PickerMessage>> {
         let bar_height = bounds.height.max(1.0);
-        handle_drag(
-            &mut state.dragging,
-            event,
-            bounds,
-            cursor,
-            |pos| {
-                let v = (1.0 - (pos.y / bar_height).clamp(0.0, 1.0)).clamp(0.0, 1.0);
-                Some(PickerMessage::ValueFromBar(v))
-            },
-        )
+        handle_drag(&mut state.dragging, event, bounds, cursor, |pos| {
+            let v = (1.0 - (pos.y / bar_height).clamp(0.0, 1.0)).clamp(0.0, 1.0);
+            Some(PickerMessage::ValueFromBar(v))
+        })
     }
 
     fn draw(
@@ -328,32 +345,55 @@ where
         let mut frame = canvas::Frame::new(renderer, sz);
         let w = sz.width;
         let h = sz.height;
-        let steps = 32;
-        let strip_h = h / steps as f32;
 
-        for i in 0..steps {
-            let v0 = 1.0 - i as f32 / steps as f32;
-            let v1 = 1.0 - (i + 1) as f32 / steps as f32;
-            let v_mid = (v0 + v1) * 0.5;
-            let color = hsv_to_iced_color(self.h, self.s, v_mid);
-            let y0 = i as f32 * strip_h;
-            frame.fill_rectangle(Point::new(0.0, y0), Size::new(w, strip_h), color);
+        if self.bar_border_radius > 0.0 {
+            let r = border::Radius::from(self.bar_border_radius);
+            let grad = gradient::Linear::new(Point::new(0.0, 0.0), Point::new(0.0, h))
+                .add_stop(0.0, hsv_to_iced_color(self.h, self.s, 1.0))
+                .add_stop(1.0, hsv_to_iced_color(self.h, self.s, 0.0));
+            frame.fill(
+                &canvas::Path::rounded_rectangle(Point::ORIGIN, Size::new(w, h), r),
+                Fill::from(grad),
+            );
+            let vy = (1.0 - self.v) * h;
+            frame.stroke(
+                &canvas::Path::line(Point::new(0.0, vy), Point::new(w, vy)),
+                canvas::Stroke::default()
+                    .with_color(picker.value_indicator)
+                    .with_width(4.0),
+            );
+            frame.stroke(
+                &canvas::Path::rounded_rectangle(Point::ORIGIN, Size::new(w, h), r),
+                canvas::Stroke::default()
+                    .with_color(picker.canvas_frame)
+                    .with_width(1.5),
+            );
+        } else {
+            let steps = 32;
+            let strip_h = h / steps as f32;
+            for i in 0..steps {
+                let v0 = 1.0 - i as f32 / steps as f32;
+                let v1 = 1.0 - (i + 1) as f32 / steps as f32;
+                let v_mid = (v0 + v1) * 0.5;
+                let color = hsv_to_iced_color(self.h, self.s, v_mid);
+                let y0 = i as f32 * strip_h;
+                frame.fill_rectangle(Point::new(0.0, y0), Size::new(w, strip_h), color);
+            }
+            let vy = (1.0 - self.v) * h;
+            frame.stroke(
+                &canvas::Path::line(Point::new(0.0, vy), Point::new(w, vy)),
+                canvas::Stroke::default()
+                    .with_color(picker.value_indicator)
+                    .with_width(4.0),
+            );
+            frame.stroke_rectangle(
+                Point::new(0.0, 0.0),
+                Size::new(w, h),
+                canvas::Stroke::default()
+                    .with_color(picker.canvas_frame)
+                    .with_width(1.5),
+            );
         }
-
-        let vy = (1.0 - self.v) * h;
-        frame.stroke(
-            &canvas::Path::line(Point::new(0.0, vy), Point::new(w, vy)),
-            canvas::Stroke::default()
-                .with_color(picker.value_indicator)
-                .with_width(4.0),
-        );
-        frame.stroke_rectangle(
-            Point::new(0.0, 0.0),
-            Size::new(w, h),
-            canvas::Stroke::default()
-                .with_color(picker.canvas_frame)
-                .with_width(1.5),
-        );
 
         vec![frame.into_geometry()]
     }
@@ -373,6 +413,7 @@ pub(crate) struct AlphaBarProgram<'a, Theme: Catalog + 'a> {
     pub g: u8,
     pub b: u8,
     pub a: f32,
+    pub bar_border_radius: f32,
     pub class: Rc<Theme::Class<'a>>,
 }
 
@@ -392,17 +433,11 @@ where
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<PickerMessage>> {
         let bar_height = bounds.height.max(1.0);
-        handle_drag(
-            &mut state.dragging,
-            event,
-            bounds,
-            cursor,
-            |pos| {
-                let a = (1.0 - (pos.y / bar_height).clamp(0.0, 1.0)).clamp(0.0, 1.0);
-                let a_u8 = (a * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
-                Some(PickerMessage::AlphaChanged(a_u8))
-            },
-        )
+        handle_drag(&mut state.dragging, event, bounds, cursor, |pos| {
+            let a = (1.0 - (pos.y / bar_height).clamp(0.0, 1.0)).clamp(0.0, 1.0);
+            let a_u8 = (a * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
+            Some(PickerMessage::AlphaChanged(a_u8))
+        })
     }
 
     fn draw(
@@ -418,41 +453,92 @@ where
         let mut frame = canvas::Frame::new(renderer, sz);
         let w = sz.width;
         let h = sz.height;
-
-        checkerboard_cells(0.0, 0.0, w, h, 4.0, |x, y, cw, ch, color| {
-            frame.fill_rectangle(Point::new(x, y), Size::new(cw, ch), color);
-        });
-
-        // Gradient strips: alpha=0 (top, transparent) → alpha=1 (bottom, opaque)
         let rf = self.r as f32 / 255.0;
         let gf = self.g as f32 / 255.0;
         let bf = self.b as f32 / 255.0;
-        let steps = 32;
-        let strip_h = h / steps as f32;
-        for i in 0..steps {
-            let a0 = 1.0 - i as f32 / steps as f32;
-            let a1 = 1.0 - (i + 1) as f32 / steps as f32;
-            let a_mid = (a0 + a1) * 0.5;
-            let color = iced::Color { r: rf, g: gf, b: bf, a: a_mid };
-            let y0 = i as f32 * strip_h;
-            frame.fill_rectangle(Point::new(0.0, y0), Size::new(w, strip_h), color);
-        }
 
-        // Indicator line at current alpha position
-        let ay = (1.0 - self.a) * h;
-        frame.stroke(
-            &canvas::Path::line(Point::new(0.0, ay), Point::new(w, ay)),
-            canvas::Stroke::default()
-                .with_color(picker.alpha_indicator)
-                .with_width(4.0),
-        );
-        frame.stroke_rectangle(
-            Point::new(0.0, 0.0),
-            Size::new(w, h),
-            canvas::Stroke::default()
-                .with_color(picker.canvas_frame)
-                .with_width(1.5),
-        );
+        if self.bar_border_radius > 0.0 {
+            let r = self.bar_border_radius;
+            let radius = border::Radius::from(r);
+            checkerboard_cells(0.0, 0.0, w, h, 4.0, |x, y, cw, ch, color| {
+                let in_tl = x < r && y < r;
+                let in_tr = x + cw > w - r && y < r;
+                let in_bl = x < r && y + ch > h - r;
+                let in_br = x + cw > w - r && y + ch > h - r;
+                if !in_tl && !in_tr && !in_bl && !in_br {
+                    frame.fill_rectangle(Point::new(x, y), Size::new(cw, ch), color);
+                }
+            });
+            let grad = gradient::Linear::new(Point::new(0.0, 0.0), Point::new(0.0, h))
+                .add_stop(
+                    0.0,
+                    Color {
+                        r: rf,
+                        g: gf,
+                        b: bf,
+                        a: 1.0,
+                    },
+                )
+                .add_stop(
+                    1.0,
+                    Color {
+                        r: rf,
+                        g: gf,
+                        b: bf,
+                        a: 0.0,
+                    },
+                );
+            frame.fill(
+                &canvas::Path::rounded_rectangle(Point::ORIGIN, Size::new(w, h), radius),
+                Fill::from(grad),
+            );
+            let ay = (1.0 - self.a) * h;
+            frame.stroke(
+                &canvas::Path::line(Point::new(0.0, ay), Point::new(w, ay)),
+                canvas::Stroke::default()
+                    .with_color(picker.alpha_indicator)
+                    .with_width(4.0),
+            );
+            frame.stroke(
+                &canvas::Path::rounded_rectangle(Point::ORIGIN, Size::new(w, h), radius),
+                canvas::Stroke::default()
+                    .with_color(picker.canvas_frame)
+                    .with_width(1.5),
+            );
+        } else {
+            checkerboard_cells(0.0, 0.0, w, h, 4.0, |x, y, cw, ch, color| {
+                frame.fill_rectangle(Point::new(x, y), Size::new(cw, ch), color);
+            });
+            let steps = 32;
+            let strip_h = h / steps as f32;
+            for i in 0..steps {
+                let a0 = 1.0 - i as f32 / steps as f32;
+                let a1 = 1.0 - (i + 1) as f32 / steps as f32;
+                let a_mid = (a0 + a1) * 0.5;
+                let color = Color {
+                    r: rf,
+                    g: gf,
+                    b: bf,
+                    a: a_mid,
+                };
+                let y0 = i as f32 * strip_h;
+                frame.fill_rectangle(Point::new(0.0, y0), Size::new(w, strip_h), color);
+            }
+            let ay = (1.0 - self.a) * h;
+            frame.stroke(
+                &canvas::Path::line(Point::new(0.0, ay), Point::new(w, ay)),
+                canvas::Stroke::default()
+                    .with_color(picker.alpha_indicator)
+                    .with_width(4.0),
+            );
+            frame.stroke_rectangle(
+                Point::new(0.0, 0.0),
+                Size::new(w, h),
+                canvas::Stroke::default()
+                    .with_color(picker.canvas_frame)
+                    .with_width(1.5),
+            );
+        }
 
         vec![frame.into_geometry()]
     }

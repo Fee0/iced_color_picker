@@ -25,9 +25,11 @@ pub(crate) const DISC_DIAMETER: f32 = 200.0;
 pub(crate) const VALUE_BAR_WIDTH: f32 = 28.0;
 pub(crate) const ALPHA_BAR_WIDTH: f32 = 28.0;
 /// Recommended width for an RGB panel (disc + value bar + padding).
-pub const PICKER_PANEL_WIDTH: f32 = DISC_DIAMETER + VALUE_BAR_WIDTH + 10.0 + 2.0 * PICKER_VERTICAL_PADDING;
+pub const PICKER_PANEL_WIDTH: f32 =
+    DISC_DIAMETER + VALUE_BAR_WIDTH + 10.0 + 2.0 * PICKER_VERTICAL_PADDING;
 /// Recommended width for an RGBA panel (disc + value bar + alpha bar + padding).
-pub const PICKER_PANEL_WIDTH_RGBA: f32 = DISC_DIAMETER + VALUE_BAR_WIDTH + 10.0 + ALPHA_BAR_WIDTH + 10.0 + 2.0 * PICKER_VERTICAL_PADDING;
+pub const PICKER_PANEL_WIDTH_RGBA: f32 =
+    DISC_DIAMETER + VALUE_BAR_WIDTH + 10.0 + ALPHA_BAR_WIDTH + 10.0 + 2.0 * PICKER_VERTICAL_PADDING;
 
 const DEFAULT_BORDER_RADIUS: f32 = 8.0;
 const PICKER_VERTICAL_PADDING: f32 = 12.0;
@@ -42,6 +44,7 @@ struct PickerSnapshot {
     a: f32,
     hex_field: String,
     border_radius: f32,
+    bar_border_radius: f32,
     width: Length,
     class_revision: u64,
     copy_confirmed: bool,
@@ -56,6 +59,7 @@ impl Hash for PickerSnapshot {
         self.a.to_bits().hash(state);
         self.hex_field.hash(state);
         self.border_radius.to_bits().hash(state);
+        self.bar_border_radius.to_bits().hash(state);
         match self.width {
             Length::Fill => 0u8.hash(state),
             Length::FillPortion(p) => {
@@ -74,6 +78,8 @@ impl Hash for PickerSnapshot {
     }
 }
 
+type OnCopyFn<'a> = Box<dyn Fn(&str) + 'a>;
+
 /// A theme-aware HSV color picker widget.
 pub struct ColorPicker<'a, Theme = iced::Theme, Renderer = iced::Renderer>
 where
@@ -81,9 +87,10 @@ where
 {
     state: &'a ColorPickerState,
     border_radius: f32,
+    bar_border_radius: f32,
     width: Length,
     show_sliders: bool,
-    on_copy: Option<Box<dyn Fn(&str) + 'a>>,
+    on_copy: Option<OnCopyFn<'a>>,
     /// Shared style class (`StyleFn` is not `Clone`, so an `Rc` is used internally).
     class: Rc<Theme::Class<'a>>,
     class_revision: u64,
@@ -101,6 +108,7 @@ where
         Self {
             state,
             border_radius: DEFAULT_BORDER_RADIUS,
+            bar_border_radius: 0.0,
             width: Length::Shrink,
             show_sliders: true,
             on_copy: None,
@@ -115,6 +123,13 @@ where
     #[must_use]
     pub fn border_radius(mut self, radius: f32) -> Self {
         self.border_radius = radius;
+        self
+    }
+
+    /// Sets the corner radius for the value and alpha canvas bars.
+    #[must_use]
+    pub fn bar_border_radius(mut self, radius: f32) -> Self {
+        self.bar_border_radius = radius;
         self
     }
 
@@ -164,6 +179,7 @@ where
             a: self.state.alpha(),
             hex_field: self.state.hex_field().to_string(),
             border_radius: self.border_radius,
+            bar_border_radius: self.bar_border_radius,
             width: self.width,
             class_revision: self.class_revision,
             copy_confirmed: self.state.copy_confirmed(),
@@ -266,12 +282,12 @@ where
             .width(Length::Fixed(DISC_DIAMETER))
             .height(Length::Fixed(DISC_DIAMETER));
 
-        let vbar = canvas::value_bar(h, s, v, Rc::clone(&class))
+        let vbar = canvas::value_bar(h, s, v, self.bar_border_radius, Rc::clone(&class))
             .width(Length::Fixed(VALUE_BAR_WIDTH))
             .height(Length::Fixed(DISC_DIAMETER));
 
         let bars_elem: Element<'a, PickerMessage, Theme, Renderer> = if self.state.alpha_enabled() {
-            let abar = canvas::alpha_bar(r, g, b, a, Rc::clone(&class))
+            let abar = canvas::alpha_bar(r, g, b, a, self.bar_border_radius, Rc::clone(&class))
                 .width(Length::Fixed(ALPHA_BAR_WIDTH))
                 .height(Length::Fixed(DISC_DIAMETER));
             Row::new()
@@ -290,9 +306,7 @@ where
             .spacing(10)
             .align_y(iced::Alignment::Center);
 
-        let mut layout = Column::new()
-            .push(preview_row)
-            .push(disc_bar);
+        let mut layout = Column::new().push(preview_row).push(disc_bar);
 
         if self.show_sliders {
             let sliders = {
@@ -368,17 +382,48 @@ fn draw_preview_chrome<Renderer>(
 {
     if let Some(clipped) = bounds.intersection(viewport) {
         if preview_color.a < 1.0 {
-            canvas::checkerboard_cells(clipped.x, clipped.y, clipped.width, clipped.height, 8.0, |x, y, cw, ch, color| {
-                renderer.fill_quad(
-                    renderer::Quad {
-                        bounds: Rectangle { x, y, width: cw, height: ch },
-                        border: Border::default(),
-                        shadow: Shadow::default(),
-                        snap: false,
+            let r = border_radius;
+            let rw = clipped.width;
+            let rh = clipped.height;
+            // Rounded gray base — renderer clips this to the rounded rect, so corners
+            // are always correctly rounded even though the checkerboard below isn't.
+            renderer.fill_quad(
+                renderer::Quad {
+                    bounds: clipped,
+                    border: Border {
+                        color: Color::TRANSPARENT,
+                        width: 0.0,
+                        radius: r.into(),
                     },
-                    Background::Color(color),
-                );
-            });
+                    shadow: Shadow::default(),
+                    snap: false,
+                },
+                Background::Color(Color { r: 0.7, g: 0.7, b: 0.7, a: 1.0 }),
+            );
+            // Checkerboard on top, skipping the four corner squares so cells never
+            // extend outside the rounded boundary (the gray base shows there instead).
+            canvas::checkerboard_cells(
+                clipped.x,
+                clipped.y,
+                rw,
+                rh,
+                8.0,
+                |x, y, cw, ch, color| {
+                    let pcx = x + cw * 0.5 - clipped.x;
+                    let pcy = y + ch * 0.5 - clipped.y;
+                    if !((pcx < r || pcx > rw - r) && (pcy < r || pcy > rh - r)) {
+                        renderer.fill_quad(
+                            renderer::Quad {
+                                bounds: Rectangle { x, y, width: cw, height: ch },
+                                border: Border::default(),
+                                shadow: Shadow::default(),
+                                snap: false,
+                            },
+                            Background::Color(color),
+                        );
+                    }
+                },
+            );
         }
         renderer.fill_quad(
             renderer::Quad {
@@ -466,10 +511,16 @@ where
             viewport,
         );
 
-        if local_shell.is_layout_invalid() { shell.invalidate_layout(); }
-        if local_shell.are_widgets_invalid() { shell.invalidate_widgets(); }
+        if local_shell.is_layout_invalid() {
+            shell.invalidate_layout();
+        }
+        if local_shell.are_widgets_invalid() {
+            shell.invalidate_widgets();
+        }
         shell.request_redraw_at(local_shell.redraw_request());
-        if local_shell.is_event_captured() { shell.capture_event(); }
+        if local_shell.is_event_captured() {
+            shell.capture_event();
+        }
         shell.request_input_method(local_shell.input_method());
 
         for msg in local_messages {
@@ -515,7 +566,7 @@ where
                 renderer,
                 preview_color,
                 picker_style.preview_border,
-                0.0,
+                self.border_radius,
                 preview_layout.bounds(),
                 viewport,
             );
