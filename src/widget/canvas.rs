@@ -120,6 +120,19 @@ fn clamped_position_in(cursor: mouse::Cursor, bounds: Rectangle) -> Option<Point
     })
 }
 
+fn bar_indicator_x(vy: f32, w: f32, h: f32, r: f32) -> (f32, f32) {
+    let inset = if vy < r {
+        let dy = vy - r;
+        r - (r * r - dy * dy).max(0.0).sqrt()
+    } else if vy > h - r {
+        let dy = vy - (h - r);
+        r - (r * r - dy * dy).max(0.0).sqrt()
+    } else {
+        0.0
+    };
+    (inset, w - inset)
+}
+
 fn handle_drag(
     dragging: &mut bool,
     event: &canvas::Event,
@@ -347,23 +360,25 @@ where
         let h = sz.height;
 
         if self.bar_border_radius > 0.0 {
-            let r = border::Radius::from(self.bar_border_radius);
+            let rv = self.bar_border_radius;
+            let radius = border::Radius::from(rv);
             let grad = gradient::Linear::new(Point::new(0.0, 0.0), Point::new(0.0, h))
                 .add_stop(0.0, hsv_to_iced_color(self.h, self.s, 1.0))
                 .add_stop(1.0, hsv_to_iced_color(self.h, self.s, 0.0));
             frame.fill(
-                &canvas::Path::rounded_rectangle(Point::ORIGIN, Size::new(w, h), r),
+                &canvas::Path::rounded_rectangle(Point::ORIGIN, Size::new(w, h), radius),
                 Fill::from(grad),
             );
             let vy = (1.0 - self.v) * h;
+            let (vx0, vx1) = bar_indicator_x(vy, w, h, rv);
             frame.stroke(
-                &canvas::Path::line(Point::new(0.0, vy), Point::new(w, vy)),
+                &canvas::Path::line(Point::new(vx0, vy), Point::new(vx1, vy)),
                 canvas::Stroke::default()
                     .with_color(picker.value_indicator)
                     .with_width(4.0),
             );
             frame.stroke(
-                &canvas::Path::rounded_rectangle(Point::ORIGIN, Size::new(w, h), r),
+                &canvas::Path::rounded_rectangle(Point::ORIGIN, Size::new(w, h), radius),
                 canvas::Stroke::default()
                     .with_color(picker.canvas_frame)
                     .with_width(1.5),
@@ -458,43 +473,35 @@ where
         let bf = self.b as f32 / 255.0;
 
         if self.bar_border_radius > 0.0 {
-            let r = self.bar_border_radius;
-            let radius = border::Radius::from(r);
+            let ra = self.bar_border_radius;
+            let radius = border::Radius::from(ra);
+            frame.fill(
+                &canvas::Path::rounded_rectangle(Point::ORIGIN, Size::new(w, h), radius),
+                Color {
+                    r: 0.7,
+                    g: 0.7,
+                    b: 0.7,
+                    a: 1.0,
+                },
+            );
             checkerboard_cells(0.0, 0.0, w, h, 4.0, |x, y, cw, ch, color| {
-                let in_tl = x < r && y < r;
-                let in_tr = x + cw > w - r && y < r;
-                let in_bl = x < r && y + ch > h - r;
-                let in_br = x + cw > w - r && y + ch > h - r;
-                if !in_tl && !in_tr && !in_bl && !in_br {
+                let cx = x + cw * 0.5;
+                let cy = y + ch * 0.5;
+                if !((cx < ra || cx > w - ra) && (cy < ra || cy > h - ra)) {
                     frame.fill_rectangle(Point::new(x, y), Size::new(cw, ch), color);
                 }
             });
             let grad = gradient::Linear::new(Point::new(0.0, 0.0), Point::new(0.0, h))
-                .add_stop(
-                    0.0,
-                    Color {
-                        r: rf,
-                        g: gf,
-                        b: bf,
-                        a: 1.0,
-                    },
-                )
-                .add_stop(
-                    1.0,
-                    Color {
-                        r: rf,
-                        g: gf,
-                        b: bf,
-                        a: 0.0,
-                    },
-                );
+                .add_stop(0.0, Color { r: rf, g: gf, b: bf, a: 1.0 })
+                .add_stop(1.0, Color { r: rf, g: gf, b: bf, a: 0.0 });
             frame.fill(
                 &canvas::Path::rounded_rectangle(Point::ORIGIN, Size::new(w, h), radius),
                 Fill::from(grad),
             );
             let ay = (1.0 - self.a) * h;
+            let (ax0, ax1) = bar_indicator_x(ay, w, h, ra);
             frame.stroke(
-                &canvas::Path::line(Point::new(0.0, ay), Point::new(w, ay)),
+                &canvas::Path::line(Point::new(ax0, ay), Point::new(ax1, ay)),
                 canvas::Stroke::default()
                     .with_color(picker.alpha_indicator)
                     .with_width(4.0),
